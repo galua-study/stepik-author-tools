@@ -40,7 +40,10 @@ class AuthorSteps(DomainModel):
 
     model_config = ConfigDict(extra="ignore")
     steps: list[AuthorStep] = Field(alias="step-sources")
+    meta: PageMetadata = Field(default_factory=PageMetadata)
 
     def to_snapshot(self) -> Snapshot:
         """Convert validated author rows without guessing local IDs or source paths."""
+        if self.meta.has_next:
+            raise ValueError("A complete author export is required; this response has another page")
         return Snapshot(version=1, steps=[step.to_record() for step in self.steps])

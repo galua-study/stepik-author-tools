@@ -2,11 +2,17 @@
 
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, TypeAdapter, model_validator
 from pydantic import JsonValue as JsonValue
 
+from .enums import SemanticField, StepKind, StructureField
+
 JsonObject: TypeAlias = dict[str, JsonValue]
-StepKind: TypeAlias = Literal["text", "choice", "matching"]
+# Strict models also accept these exact enum values in already-decoded JSON objects.
+ReportField: TypeAlias = (
+    Annotated[SemanticField, BeforeValidator(lambda value: SemanticField(value))]
+    | Annotated[StructureField, BeforeValidator(lambda value: StructureField(value))]
+)
 PositiveId: TypeAlias = Annotated[int, Field(gt=0)]
 NonEmptyText: TypeAlias = Annotated[str, Field(min_length=1)]
 Version: TypeAlias = Annotated[int, Field(ge=1, le=1)]
@@ -152,7 +158,8 @@ class Conflict(DomainModel):
 
     model_config = ConfigDict(frozen=True)
     step_id: str
-    field: str
+    field: ReportField
+    reason: str = ""
     base: JsonValue = None
     local: JsonValue = None
     remote: JsonValue = None
@@ -162,7 +169,7 @@ class SemanticStep(DomainModel):
     """Normalized content and grading state without transport/editor metadata."""
 
     model_config = ConfigDict(frozen=True)
-    kind: str
+    kind: Annotated[StepKind, BeforeValidator(lambda value: StepKind(value))]
     body: str
     options: tuple[str, ...] = ()
     answers: tuple[int, ...] = ()
@@ -177,7 +184,7 @@ class Change(DomainModel):
     model_config = ConfigDict(frozen=True)
     step_id: str
     position: PositiveId
-    field: str
+    field: ReportField
     before: JsonValue
     after: JsonValue
     message: str

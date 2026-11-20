@@ -3,7 +3,15 @@
 import pytest
 from pydantic import ValidationError
 
-from stepik_author_tools.domain.models import Block, Change, ChoiceOption, Manifest, StepSource
+from stepik_author_tools.domain.enums import SemanticField, StepKind
+from stepik_author_tools.domain.models import (
+    Block,
+    Change,
+    ChoiceOption,
+    Manifest,
+    SemanticStep,
+    StepSource,
+)
 
 
 @pytest.mark.parametrize(
@@ -44,10 +52,38 @@ def test_nested_missing_key_is_rejected_without_echoing_content() -> None:
 
 def test_output_records_cannot_be_reassigned() -> None:
     change = Change(
-        step_id="sample", position=1, field="answers", before=[1], after=[2], message="Changed"
+        step_id="sample",
+        position=1,
+        field=SemanticField.ANSWERS,
+        before=[1],
+        after=[2],
+        message="Changed",
     )
     with pytest.raises(ValidationError, match="frozen"):
         change.__setattr__("field", "body")
+
+
+def test_semantic_enums_cover_all_compared_fields_and_round_trip_as_strings() -> None:
+    step = SemanticStep.model_validate_json('{"kind":"choice","body":"Pick"}')
+    assert step.kind is StepKind.CHOICE
+    assert set(step.to_dict()) == {field.value for field in SemanticField}
+    assert step.to_dict()["kind"] == "choice"
+    assert SemanticStep.model_validate({"kind": "choice", "body": "Pick"}).kind is StepKind.CHOICE
+    change = Change.model_validate(
+        {
+            "step_id": "step",
+            "position": 1,
+            "field": "answers",
+            "before": [1],
+            "after": [2],
+            "message": "Changed",
+        }
+    )
+    assert change.field is SemanticField.ANSWERS
+    with pytest.raises(ValidationError):
+        SemanticStep.model_validate({"kind": b"choice", "body": "Pick"})
+    with pytest.raises(ValidationError):
+        SemanticStep.model_validate_json('{"kind":"quiz-typo","body":""}')
 
 
 def test_source_defaults_are_independent_and_omissions_are_preserved() -> None:

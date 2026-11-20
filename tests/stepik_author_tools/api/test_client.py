@@ -2,12 +2,13 @@
 
 import json
 from email.message import Message
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request
 
 import pytest
 
-from stepik_author_tools import StepikClient
+from stepik_author_tools import StepikClient, load_settings
 from stepik_author_tools.course.project import Course
 from stepik_author_tools.domain.models import JsonObject
 
@@ -93,3 +94,26 @@ def test_malformed_pagination_flag_is_not_treated_as_truthy() -> None:
     )
     with pytest.raises(ValueError, match="has_next"):
         client.get("lessons")
+
+
+def test_profile_controls_endpoint_resources_limit_and_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = tmp_path / "mirror.toml"
+    config.write_text(
+        '[api]\nbase_url = "https://mirror.example/api/v2"\nresources = ["catalog"]\n'
+        "max_pages = 1\ntimeout = 2.5",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("STEPIK_TOKEN", "synthetic")
+    transport = FakeTransport([{"catalog": [], "meta": {"has_next": True}}])
+    client = StepikClient(settings=load_settings(config).api, transport=transport)
+    with pytest.raises(ValueError, match="Unsupported"):
+        client.get("lessons")
+    with pytest.raises(ValueError, match="pagination"):
+        client.get("catalog")
+    ((request, timeout),) = transport.calls
+    assert request.full_url == "https://mirror.example/api/v2/catalog?page=1"
+    assert timeout == 2.5
+    assert not request.has_header("Authorization")

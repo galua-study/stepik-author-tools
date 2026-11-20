@@ -10,6 +10,7 @@ class Arguments(argparse.Namespace):
 
     command: str
     project: Path
+    config: Path | None = None
     scope: str | None = None
     out: Path | None = None
     remote: Path | None = None
@@ -29,16 +30,24 @@ def _add_remote_arguments(parser: argparse.ArgumentParser) -> None:
 
 def parse_arguments(argv: Sequence[str] | None = None) -> Arguments:
     """Parse the established three-command interface into typed attributes."""
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument(
+        "--config",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help="TOML settings overriding packaged defaults",
+    )
     parser = argparse.ArgumentParser(
-        description="Build Stepik imports, compare, and prepare safe local patches"
+        description="Build Stepik imports, compare, and prepare safe local patches",
+        parents=[shared],
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
     for name in ("build", "diff", "pull"):
-        command = subcommands.add_parser(name)
+        command = subcommands.add_parser(name, parents=[shared])
         command.add_argument(
             "project",
             type=Path,
-            help="course.json, project directory, or topic/module map directory",
+            help="JSON course manifest, project directory, or topic/module map directory",
         )
         command.add_argument("--scope", help="exact topic or module ID")
         if name == "build":

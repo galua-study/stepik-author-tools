@@ -3,26 +3,18 @@
 import json
 from difflib import unified_diff
 
+from ..config.settings import DiffLabels
 from ..course.project import Course
+from ..domain.enums import SemanticField, StructureField
 from ..domain.models import Change, Snapshot, StepRecord
 from ..markdown.markup import blocks, code_blocks
 from .semantic import align, platform_id, semantic_block
 
-_LABELS = {
-    "kind": "step type changed",
-    "body": "student text or markup changed",
-    "options": "answer options/order changed",
-    "answers": "correct answer changed",
-    "pairs": "matching pairs changed",
-    "settings": "exercise settings changed",
-    "feedback": "feedback changed",
-}
 
-
-def _text_detail(before: str, after: str) -> tuple[str, str]:
+def _text_detail(before: str, after: str, labels: DiffLabels) -> tuple[str, str]:
     old_code, new_code = code_blocks(before), code_blocks(after)
     if old_code != new_code:
-        label = "code changed (including literal whitespace)"
+        label = labels.code
         diff = unified_diff(
             "\n".join(old_code).splitlines(),
             "\n".join(new_code).splitlines(),
@@ -31,23 +23,24 @@ def _text_detail(before: str, after: str) -> tuple[str, str]:
             lineterm="",
         )
     else:
-        label = _LABELS["body"]
+        label = labels.fields[SemanticField.BODY]
         diff = unified_diff(blocks(before), blocks(after), "local HTML", "Stepik HTML", lineterm="")
     return label, "\n".join(diff)
 
 
-def _content_changes(local: StepRecord, remote: StepRecord) -> list[Change]:
+def _content_changes(local: StepRecord, remote: StepRecord, labels: DiffLabels) -> list[Change]:
     before, after = semantic_block(local.block), semantic_block(remote.block)
     old_fields, new_fields = before.to_dict(), after.to_dict()
     changes = []
-    for field, old_value in old_fields.items():
+    for field in SemanticField:
+        old_value = old_fields[field]
         new_value = new_fields[field]
         if old_value == new_value:
             continue
-        if field == "body":
-            label, detail = _text_detail(before.body, after.body)
+        if field is SemanticField.BODY:
+            label, detail = _text_detail(before.body, after.body, labels)
         else:
-            label = _LABELS[field]
+            label = labels.fields[field]
             detail = (
                 f"{json.dumps(old_value, ensure_ascii=False)} -> "
                 f"{json.dumps(new_value, ensure_ascii=False)}"
@@ -66,22 +59,22 @@ def _content_changes(local: StepRecord, remote: StepRecord) -> list[Change]:
     return changes
 
 
-def _step_changes(local: StepRecord, remote: StepRecord | None) -> list[Change]:
+def _step_changes(local: StepRecord, remote: StepRecord | None, labels: DiffLabels) -> list[Change]:
     if remote is None:
         return [
             Change(
                 step_id=local.id,
                 position=local.position,
-                field="missing",
+                field=StructureField.MISSING,
                 before=local.stepik_id,
                 after=None,
-                message="step missing remotely",
+                message=labels.missing,
             )
         ]
     changes = []
     for field, before, after in (
-        ("position", local.position, remote.position),
-        ("lesson", local.lesson, remote.lesson),
+        (StructureField.POSITION, local.position, remote.position),
+        (StructureField.LESSON, local.lesson, remote.lesson),
     ):
         if before != after:
             changes.append(
@@ -91,10 +84,10 @@ def _step_changes(local: StepRecord, remote: StepRecord | None) -> list[Change]:
                     field=field,
                     before=before,
                     after=after,
-                    message=f"step moved: {field} {before} -> {after}",
+                    message=f"{labels.moved}: {field} {before} -> {after}",
                 )
             )
-    return changes + _content_changes(local, remote)
+    return changes + _content_changes(local, remote, labels)
 
 
 def compare(course: Course, remote: Snapshot, scope: str | None = None) -> list[Change]:
@@ -104,16 +97,18 @@ def compare(course: Course, remote: Snapshot, scope: str | None = None) -> list[
     changes = [
         change
         for step in local
-        for change in _step_changes(step, alignment.matched.get(platform_id(step)))
+        for change in _step_changes(
+            step, alignment.matched.get(platform_id(step)), course.settings.diff
+        )
     ]
     changes.extend(
         Change(
             step_id=str(step.stepik_id),
             position=step.position,
-            field="added",
+            field=StructureField.ADDED,
             before=None,
             after=step.stepik_id,
-            message="unmapped step added remotely",
+            message=course.settings.diff.added,
         )
         for step in alignment.added
     )

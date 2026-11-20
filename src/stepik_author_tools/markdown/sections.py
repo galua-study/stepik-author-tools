@@ -1,85 +1,38 @@
-"""Locate authoring sections without interpreting headings inside fenced code."""
+"""Map CommonMark headings back to editable spans in the original document."""
 
-import re
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from io import StringIO
+from itertools import accumulate
 
-SectionKey: TypeAlias = Literal[
-    "condition", "options", "answer", "explanation", "left", "right", "transfer"
-]
-ALIASES: dict[SectionKey, tuple[str, ...]] = {
-    "condition": ("Condition", "Условие"),
-    "options": ("Options", "Варианты ответа"),
-    "answer": (
-        "Correct answer",
-        "Correct answers",
-        "Правильный ответ",
-        "Правильные ответы",
-        "Правильное решение",
-        "Reference solution",
-    ),
-    "explanation": ("Explanation", "Объяснение"),
-    "left": ("Left column", "Левая колонка"),
-    "right": ("Right column", "Правая колонка"),
-    "transfer": ("Transfer notes", "Для переноса в Stepik"),
-}
-AUTHOR_SECTIONS: tuple[SectionKey, ...] = (
-    "options",
-    "left",
-    "right",
-    "answer",
-    "explanation",
-    "transfer",
-)
+from ..config.authoring import MarkdownSettings
+from .markup import MARKDOWN
 
 
 @dataclass(frozen=True)
 class Section:
-    """Offsets into the original document, including its untouched heading."""
+    """Offsets for the heading and the original text below it."""
 
-    title: str
     heading_start: int
     content_start: int
     end: int
 
 
-def headings(text: str) -> list[tuple[str, int, int]]:
-    """Return level-three headings outside backtick and tilde fences."""
-    result: list[tuple[str, int, int]] = []
-    offset = 0
-    fence: str | None = None
-    for line in text.splitlines(keepends=True):
-        match = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
-        if match:
-            token = match[1]
-            if fence is None:
-                fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence):
-                fence = None
-        elif fence is None and (heading := re.match(r"^### (.+?)\s*$", line)):
-            result.append((heading[1], offset, offset + len(line)))
-        offset += len(line)
-    return result
-
-
-def find_section(text: str, key: SectionKey) -> Section | None:
-    """Find a known authoring section and its next heading boundary."""
-    items = headings(text)
-    for index, (title, heading_start, content_start) in enumerate(items):
-        if title in ALIASES[key]:
-            end = items[index + 1][1] if index + 1 < len(items) else len(text)
-            return Section(title, heading_start, content_start, end)
-    return None
-
-
-def student_span(text: str) -> tuple[int, int]:
-    """Keep self-check sections, stopping before the first grading/author heading."""
-    condition = find_section(text, "condition")
-    if condition is None:
-        raise ValueError("Missing section: condition")
-    boundaries = [
-        section.heading_start
-        for key in AUTHOR_SECTIONS
-        if (section := find_section(text, key)) is not None
+def parse_sections(text: str, dialect: MarkdownSettings) -> dict[str, Section]:
+    """Index configured headings outside fences, block quotes and nested lists."""
+    # CommonMark counts CR, LF and CRLF as line breaks. Unicode paragraph separators
+    # remain inside a line and must not shift a later answer heading into student text.
+    offsets = list(accumulate(map(len, StringIO(text, newline="")), initial=0))
+    tokens = MARKDOWN.parse(text)
+    headings = [
+        (tokens[index + 1].content, offsets[token.map[0]], offsets[token.map[1]])
+        for index, token in enumerate(tokens)
+        if token.type == "heading_open" and token.tag == "h3" and token.level == 0 and token.map
     ]
-    return condition.content_start, min(boundaries, default=len(text))
+    roles = {title: key for key, titles in dialect.author_sections.items() for title in titles}
+    roles.update(dict.fromkeys(dialect.condition, "condition"))
+    sections: dict[str, Section] = {}
+    for index, (title, start, content) in enumerate(headings):
+        if role := roles.get(title):
+            end = headings[index + 1][1] if index + 1 < len(headings) else len(text)
+            sections.setdefault(role, Section(start, content, end))
+    return sections

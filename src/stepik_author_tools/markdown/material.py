@@ -1,15 +1,14 @@
 """Student/author document boundaries and compilation of a single source material."""
 
-import re
-from dataclasses import dataclass
-
-from ..domain.models import Block, StepKind, StepSource
+from ..config import load_settings
+from ..config.authoring import MarkdownSettings, SectionKey
+from ..domain.enums import StepKind
+from ..domain.models import Block, StepSource
 from .exercises import choice_source, matching_source
 from .markup import render
-from .sections import SectionKey, find_section, student_span
+from .sections import parse_sections
 
 
-@dataclass
 class Material:
     """Editable Markdown preserving all source sections outside an explicit edit.
 
@@ -17,11 +16,23 @@ class Material:
     later replacements when a preceding paragraph changes length.
     """
 
-    text: str
+    def __init__(self, text: str, dialect: MarkdownSettings | None = None) -> None:
+        self.dialect = dialect or load_settings().markdown
+        self.text = text
+
+    @property
+    def text(self) -> str:
+        """Return the original Markdown, including local author sections."""
+        return self._text
+
+    @text.setter
+    def text(self, value: str) -> None:
+        self._text = value
+        self._sections = parse_sections(value, self.dialect)
 
     def section(self, key: SectionKey) -> tuple[int, int] | None:
         """Return the section content span, excluding its heading."""
-        section = find_section(self.text, key)
+        section = self._sections.get(key)
         return (section.content_start, section.end) if section else None
 
     def get(self, key: SectionKey) -> str:
@@ -45,12 +56,25 @@ class Material:
     @property
     def title(self) -> str:
         """Extract a student heading without the author's numbered task prefix."""
-        title = re.sub(r"^#+\s*", "", self.text.splitlines()[0])
-        return re.sub(r"^(?:Задание|Task)\s+[\d.]+\s*", "", title)
+        title = self.text.splitlines()[0].lstrip("#").lstrip()
+        return self.dialect.patterns.task_prefix.sub("", title, count=1)
 
     def body_span(self) -> tuple[int, int]:
         """Locate condition/self-check content before grading and author sections."""
-        return student_span(self.text)
+        condition = self._sections.get("condition")
+        if condition is None:
+            raise ValueError("Missing section: condition")
+        end = min(
+            (
+                section.heading_start
+                for key, section in self._sections.items()
+                if key != "condition"
+            ),
+            default=len(self.text),
+        )
+        if end < condition.content_start:
+            raise ValueError("Author sections must follow the condition")
+        return condition.content_start, end
 
     def body(self) -> str:
         """Return student Markdown only, including any local self-check steps."""
@@ -65,33 +89,37 @@ class Material:
             self.text = html.strip() + "\n"
 
     def _grading(self, metadata: str) -> tuple[StepKind, StepSource]:
-        if options := self.get("options"):
-            prefix = self.text[: self.body_span()[0]]
-            return "choice", choice_source(options, self.get("answer"), prefix)
-        if left := self.get("left"):
-            return "matching", matching_source(left, self.get("right"), self.get("answer"))
+        rules = self.dialect.patterns
         prefix = self.text[: self.body_span()[0]]
-        if re.search(r"сортиров|сопоставлен|упорядочив|sorting|matching", prefix, re.I):
+        if options := self.get("options"):
+            return StepKind.CHOICE, choice_source(options, self.get("answer"), prefix, rules)
+        if left := self.get("left"):
+            return StepKind.MATCHING, matching_source(
+                left, self.get("right"), self.get("answer"), rules
+            )
+        if rules.unsupported_layout.search(prefix):
             raise ValueError(
                 "Unsupported exercise layout; use Left column / Right column for matching"
             )
-        if metadata and not re.search(r"самопровер|self.check", metadata, re.I):
+        if metadata and not rules.self_check.search(metadata):
             raise ValueError(
                 "Unsupported exercise type; only explicit local self-check tasks become text"
             )
-        return "text", StepSource()
+        return StepKind.TEXT, StepSource()
 
     def compile(self) -> Block:
         """Compile student HTML and separate grading settings with empty feedback."""
-        type_match = re.search(r"(?m)^\*\*(?:Тип|Type):\*\*\s*([^\n]+)", self.text)
-        metadata = type_match[1] if type_match else ""
-        kind: StepKind = "text"
-        source: StepSource = StepSource()
-        if not self.task and (metadata or self.section("answer") or self.section("explanation")):
-            raise ValueError("Exercise/author sections require an explicit Condition heading")
+        type_match = self.dialect.patterns.type_line.search(self.text)
+        metadata = type_match["value"] if type_match else ""
+        kind = StepKind.TEXT
+        source = StepSource()
         if self.task:
             kind, source = self._grading(metadata)
-        markdown = "## " + self.title + "\n\n" + self.body() if self.task else self.body()
+            markdown = f"## {self.title}\n\n{self.body()}"
+        elif metadata or self._sections:
+            raise ValueError("Exercise/author sections require an explicit Condition heading")
+        else:
+            markdown = self.body()
         return Block(
             name=kind,
             text=render(markdown),

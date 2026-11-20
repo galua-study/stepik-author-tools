@@ -1,4 +1,4 @@
 include README.md LICENSE
 recursive-include examples/demo *.md *.json
 recursive-include tests *.py
-include scripts/check.ps1
+recursive-include .github/scripts *.py

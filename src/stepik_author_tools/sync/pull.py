@@ -1,12 +1,12 @@
 """Coordinate identity checks, semantic merges and local patch proposals."""
 
-import json
 from pathlib import Path
 
 from ..course.project import Course
+from ..domain.enums import StructureField
 from ..domain.models import Conflict, PullResult, Snapshot, StepRecord
-from ..serialization.jsonio import contained, read
-from .merge import make_conflict, merge_semantics
+from ..serialization.files import read_text
+from .merge import merge_semantics
 from .ordering import merge_order
 from .patches import render_patch
 from .projection import project_material
@@ -18,22 +18,29 @@ def _identity_conflict(
 ) -> Conflict | None:
     step_id = local.id
     if base is None or base.stepik_id != local.stepik_id:
-        return make_conflict(step_id, "missing baseline or changed identity")
+        return Conflict(
+            step_id=step_id,
+            field=StructureField.IDENTITY,
+            reason="Missing baseline or changed identity",
+        )
     if remote is None:
-        return make_conflict(step_id, "remote deletion; review manually")
+        return Conflict(
+            step_id=step_id, field=StructureField.MISSING, reason="Review remote deletion"
+        )
     if remote.lesson != local.lesson:
-        return make_conflict(
-            step_id,
-            "cross-topic move; review manually",
-            base.lesson,
-            local.lesson,
-            remote.lesson,
+        return Conflict(
+            step_id=step_id,
+            field=StructureField.LESSON,
+            reason="Review cross-topic move",
+            base=base.lesson,
+            local=local.lesson,
+            remote=remote.lesson,
         )
     return None
 
 
 def _propose_step(
-    root: Path, local: StepRecord, base: StepRecord, remote: StepRecord
+    course: Course, local: StepRecord, base: StepRecord, remote: StepRecord
 ) -> tuple[str | None, list[Conflict]]:
     before = semantic_block(base.block)
     current = semantic_block(local.block)
@@ -45,13 +52,17 @@ def _propose_step(
         return None, conflicts
     if len(local.paths) != 1:
         return None, [
-            make_conflict(local.id, "combined source files require manual boundary review")
+            Conflict(
+                step_id=local.id,
+                field=StructureField.PATHS,
+                reason="Combined source files require manual boundary review",
+            )
         ]
-    original = read(contained(root, local.paths[0]))
+    original = read_text(course.source_path(local.paths[0]))
     try:
-        return project_material(original, current, merged), []
+        return project_material(original, current, merged, course.settings.markdown), []
     except ValueError as error:
-        return None, [make_conflict(local.id, str(error))]
+        return None, [Conflict(step_id=local.id, field=StructureField.SOURCE, reason=str(error))]
 
 
 def _material_proposals(
@@ -67,10 +78,10 @@ def _material_proposals(
             continue
         # The identity check guarantees both sides exist before semantic merging.
         assert before is not None and other is not None
-        content, step_conflicts = _propose_step(course.root, step, before, other)
+        content, step_conflicts = _propose_step(course, step, before, other)
         conflicts.extend(step_conflicts)
         if content is not None:
-            proposed[contained(course.root, step.paths[0])] = content
+            proposed[course.source_path(step.paths[0])] = content
     return proposed, conflicts
 
 
@@ -84,14 +95,18 @@ def prepare_pull(
     alignment = align(local, remote)
     proposed, conflicts = _material_proposals(course, local, baseline, alignment.matched)
     conflicts.extend(
-        make_conflict(str(step.stepik_id), "unmapped remote addition; review manually")
+        Conflict(
+            step_id=str(step.stepik_id),
+            field=StructureField.ADDED,
+            reason="Review unmapped remote addition",
+        )
         for step in alignment.added
     )
     manifest, order_conflicts = merge_order(course, local, baseline, alignment.matched, scope)
     conflicts.extend(order_conflicts)
     if manifest is not None and course.manifest_path is not None:
         proposed[course.manifest_path] = (
-            json.dumps(manifest.to_dict(exclude_unset=True), ensure_ascii=False, indent=2) + "\n"
+            manifest.model_dump_json(exclude_unset=True, indent=2) + "\n"
         )
     patch, names = render_patch(course.root, proposed)
     return PullResult(patch=patch, conflicts=conflicts, changed_files=names)

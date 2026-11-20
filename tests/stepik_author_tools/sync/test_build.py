@@ -1,5 +1,6 @@
 """Behavioral regression tests for sync.build."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,6 @@ from stepik_author_tools import (
     save_baseline,
 )
 from stepik_author_tools.course.project import Course
-from stepik_author_tools.serialization.jsonio import load_json
 from tests.helpers import DEMO, snapshot, source_of
 
 
@@ -61,4 +61,17 @@ def test_stale_build_fails_without_leaving_mixed_scope(project: Course, tmp_path
 
 def test_build_retains_original_snapshot_contract(tmp_path: Path) -> None:
     assert build(load_course(DEMO), tmp_path) == read_snapshot(DEMO / "remote-base.json")
-    assert load_json(tmp_path / "local-snapshot.json") == load_json(DEMO / "remote-base.json")
+    assert json.loads((tmp_path / "local-snapshot.json").read_bytes()) == json.loads(
+        (DEMO / "remote-base.json").read_bytes()
+    )
+
+
+def test_build_refuses_to_overwrite_manifest_before_any_write(project: Course) -> None:
+    assert project.manifest_path
+    manifest = project.manifest_path.rename(project.root / "index.json")
+    course = load_course(manifest)
+    before = manifest.read_bytes()
+    with pytest.raises(ValueError, match="input"):
+        build(course, project.root)
+    assert manifest.read_bytes() == before
+    assert not list(project.root.glob("*.step"))

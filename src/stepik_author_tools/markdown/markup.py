@@ -6,14 +6,15 @@ from bs4 import BeautifulSoup
 from bs4.element import Comment, NavigableString, Tag
 from markdown_it import MarkdownIt
 
-_MARKDOWN = MarkdownIt("commonmark", {"html": True}).enable("table")
+MARKDOWN = MarkdownIt("commonmark", {"html": True}).enable("table")
+_HTML_WHITESPACE = re.compile(r"\s+")
 _BLOCK_CONTAINERS = {"div", "ul", "ol", "table", "thead", "tbody", "tr"}
 _WRAPPED_BLOCKS = {"p", "pre", "h2", "h3", "ul", "ol", "table"}
 
 
 def render(value: str) -> str:
     """Render CommonMark with tables and source-provided HTML enabled."""
-    html = _MARKDOWN.render(value)
+    html = MARKDOWN.render(value)
     # MarkdownIt supports custom non-HTML renderers; this instance must return HTML.
     if not isinstance(html, str):
         raise ValueError("Markdown renderer did not return HTML text")
@@ -24,8 +25,10 @@ def fragment(value: str) -> str:
     """Render an option without a redundant single-paragraph wrapper."""
     html = render(value)
     soup = BeautifulSoup(html, "html.parser")
-    if len(soup.contents) == 1 and soup.p:
-        return soup.p.decode_contents()
+    if len(soup.contents) == 1:
+        only = soup.contents[0]
+        if isinstance(only, Tag) and only.name == "p" and not only.attrs:
+            return only.decode_contents()
     return html
 
 
@@ -54,7 +57,7 @@ def _normalize_text(soup: BeautifulSoup) -> None:
         # Code indentation and spaces inside literals are observable course content.
         if node.find_parent(["pre", "code", "script", "style"]):
             continue
-        normalized = re.sub(r"\s+", " ", str(node).replace("\xa0", " "))
+        normalized = _HTML_WHITESPACE.sub(" ", str(node))
         parent = node.parent
         between_blocks = parent is soup or (parent is not None and parent.name in _BLOCK_CONTAINERS)
         if not normalized.strip() and between_blocks:

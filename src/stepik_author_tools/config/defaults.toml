@@ -1,0 +1,62 @@
+[api]
+base_url = "https://stepik.org/api/"
+resources = ["courses", "sections", "units", "lessons", "steps", "step-sources"]
+max_pages = 10000
+timeout = 30
+
+[project]
+manifest_name = "course.json"
+
+[markdown]
+condition = ["Condition", "Условие"]
+
+# Every heading in this table ends the student-facing part of a task.
+[markdown.author_sections]
+options = ["Options", "Варианты ответа"]
+answer = ["Correct answer", "Correct answers", "Правильный ответ", "Правильные ответы", "Правильное решение", "Reference solution"]
+explanation = ["Explanation", "Объяснение"]
+left = ["Left column", "Левая колонка"]
+right = ["Right column", "Правая колонка"]
+transfer = ["Transfer notes", "Для переноса в Stepik"]
+
+# Literal TOML strings preserve Python regex escapes. The parser reads named groups.
+[markdown.patterns]
+task_prefix = '^(?:Задание|Task)\s+[\d.]+\s*'
+type_line = '(?m)^\*\*(?:Тип|Type):\*\*[ \t]*(?P<value>[^\n]+)'
+multiple_choice = '(?i)несколько|несколькими|multiple'
+self_check = '(?i)самопровер|self.check'
+unsupported_layout = '(?i)сортиров|сопоставлен|упорядочив|sorting|matching'
+numbered_item = '(?m)^(?P<number>\d+)\.\s+'
+option_heading = '(?m)^(?:Вариант|Option) (?P<number>\d+):[ \t]*\r?\n'
+answer_list = '^\s*(?P<numbers>\d+(?:(?:\s*[,;]\s*|\s+(?:and|и)\s+|\s+)\d+)*)[.)]?(?=\s|$)'
+answer_separator = '(?:\s*[,;]\s*|\s+(?:and|и)\s+|\s+)'
+bullet_answer = '(?m)^-\s+(?P<number>\d+)\.'
+right_item = '(?m)^- \*\*(?P<letter>[A-ZА-ЯЁ]+)\*\*\s*[—–-]\s*'
+matching_pair = '(?P<number>\d+)\s*[—–-]\s*(?P<letter>[A-ZА-ЯЁ]+)'
+
+[markdown.format]
+numbered_item = "{number}. {text}"
+right_item = "- **{letter}** — {text}"
+matching_pair = "{number} — {letter}"
+answer_separator = ", "
+
+[maps]
+topic_folder = '^Тема\s'
+row = '(?m)^\|\s*(?P<number>\d+)\s*\|(?P<cell>.+?)\|'
+link = '\]\(<(?P<path>[^>]+)>\)'
+lesson = 'stepik\.org/(?:edit-)?lesson/(?P<id>\d+)'
+
+[diff]
+code = "code changed (including literal whitespace)"
+moved = "step moved"
+missing = "step missing remotely"
+added = "unmapped step added remotely"
+
+[diff.fields]
+kind = "step type changed"
+body = "student text or markup changed"
+options = "answer options/order changed"
+answers = "correct answer changed"
+pairs = "matching pairs changed"
+settings = "exercise settings changed"
+feedback = "feedback changed"

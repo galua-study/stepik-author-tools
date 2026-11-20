@@ -2,41 +2,44 @@
 
 from dataclasses import dataclass
 
+from ..domain.enums import StepKind
 from ..domain.models import Block, SemanticStep, Snapshot, StepRecord, StepSource
 from ..markdown.markup import canonical
 
 
 def semantic_block(block: Block) -> SemanticStep:
     """Extract typed semantic fields, requiring author-visible grading data."""
-    kind = block.name
-    if kind not in {"text", "choice", "matching"}:
-        raise ValueError(f"Unsupported Stepik block: {kind}")
+    try:
+        kind = StepKind(block.name)
+    except ValueError:
+        raise ValueError(f"Unsupported Stepik block: {block.name}") from None
     source = block.source or StepSource()
-    options = source.options
-    pairs = source.pairs
-    if kind == "choice" and not options:
-        raise ValueError("Choice source is incomplete; author step-sources access is required")
-    if kind == "matching" and not pairs:
-        raise ValueError("Matching source does not expose pairs")
-    feedback = (block.feedback_correct, block.feedback_wrong)
+    options: tuple[str, ...] = ()
+    answers: tuple[int, ...] = ()
+    pairs: tuple[tuple[str, str], ...] = ()
+    feedback: tuple[str, ...] = (block.feedback_correct, block.feedback_wrong)
+    if kind is StepKind.CHOICE:
+        if not source.options:
+            raise ValueError("Choice source is incomplete; author step-sources access is required")
+        options = tuple(canonical(option.text) for option in source.options)
+        answers = tuple(i for i, option in enumerate(source.options, 1) if option.is_correct)
+        feedback += tuple(option.feedback for option in source.options)
+    elif kind is StepKind.MATCHING:
+        if not source.pairs:
+            raise ValueError("Matching source does not expose pairs")
+        pairs = tuple((canonical(pair.first), canonical(pair.second)) for pair in source.pairs)
     return SemanticStep(
         kind=kind,
         body=canonical(block.text),
-        options=tuple(canonical(option.text) for option in options) if kind == "choice" else (),
-        answers=tuple(i for i, option in enumerate(options, 1) if option.is_correct)
-        if kind == "choice"
-        else (),
-        pairs=tuple((canonical(pair.first), canonical(pair.second)) for pair in pairs)
-        if kind == "matching"
-        else (),
+        options=options,
+        answers=answers,
+        pairs=pairs,
         settings={
             key: value
             for key, value in source.to_dict(exclude_unset=True).items()
             if key not in {"options", "pairs"}
         },
-        feedback=feedback + tuple(option.feedback for option in options)
-        if kind == "choice"
-        else feedback,
+        feedback=feedback,
     )
 
 
@@ -46,7 +49,7 @@ def platform_id(step: StepRecord) -> int:
     if value is None:
         raise ValueError(
             "Stable stepik_id mapping required; never infer identity from position. "
-            "Use course.json."
+            "Record the mapping in the course manifest."
         )
     return value
 

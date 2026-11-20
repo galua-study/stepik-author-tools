@@ -26,29 +26,16 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check release tag against package version
-        shell: python
+        if: github.ref_type == 'tag'
         env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          import os
-          import pathlib
-          import tomllib
-          version = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']
-          if os.environ['REF_TYPE'] == 'tag':
-              assert os.environ['REF_NAME'] == f'v{version}', 'Tag must match pyproject.toml version'
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python .github/scripts/check_release_tag.py
       - run: python -m pip install 'build>=1.2,<2' 'twine>=6,<7'
       # Default build creates the wheel from the sdist, checking its completeness.
       - run: python -m build
       - run: python -m twine check --strict dist/*
       - name: Write SHA-256 checksums
-        shell: python
-        run: |
-          import hashlib
-          from pathlib import Path
-          files = sorted(Path('dist').glob('*'))
-          checksums = ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in files)
-          Path('dist/SHA256SUMS').write_text(checksums, encoding='utf-8')
+        run: python .github/scripts/write_checksums.py
       - uses: actions/upload-artifact@v4
         with:
           name: distributions
@@ -78,24 +65,12 @@ jobs:
           name: distributions
           path: dist/
       - name: Install built distribution
-        shell: python
         env:
           DISTRIBUTION: ${{ matrix.distribution }}
-        run: |
-          import os
-          import subprocess
-          import sys
-          from pathlib import Path
-          package, = Path('dist').glob(os.environ['DISTRIBUTION'])
-          subprocess.run([sys.executable, '-m', 'pip', 'install', f'{package}[test]'], check=True)
+        run: python .github/scripts/install_distribution.py
       - run: python -m pip check
       - name: Verify installed package origin
-        shell: python
-        run: |
-          import sys
-          from pathlib import Path
-          import stepik_author_tools
-          assert Path(stepik_author_tools.__file__).is_relative_to(Path(sys.prefix))
+        run: python .github/scripts/verify_install.py
       # Includes the real console command and the offline build/diff/pull demo.
       - run: python -m pytest -q
 

@@ -1,6 +1,6 @@
 """Behavioral regression tests for markdown.markup."""
 
-from stepik_author_tools.markdown.markup import blocks, canonical
+from stepik_author_tools.markdown.markup import blocks, canonical, fragment
 
 
 def test_html_semantics() -> None:
@@ -23,3 +23,8 @@ def test_split_blocks_preserves_escaped_text_beside_tags() -> None:
     html = "Show &lt;b&gt; &amp; &lt;i&gt;<p>Example</p>"
     assert blocks(html) == ["Show &lt;b&gt; &amp; &lt;i&gt;", "<p>Example</p>"]
     assert "".join(blocks(html)) == canonical(html)
+
+
+def test_option_fragment_keeps_styled_container_and_other_paragraphs() -> None:
+    html = '<div style="color:red"><p>First</p><p>Second</p></div>'
+    assert canonical(fragment(html)) == canonical(html)

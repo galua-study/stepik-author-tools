@@ -12,12 +12,12 @@ review meaningful differences, and prepare a Git patch from edits made on Stepik
 Version 0.1 supports text, single choice, multiple choice, matching, and local
 self-check exercises. Network operations are read-only.
 
-[Quick start](#quick-start) · [Authoring](#authoring) · [Synchronization](#synchronization) ·
+[Quick start](#quick-start) · [Authoring](#authoring) · [Configuration](#configuration) · [Synchronization](#synchronization) ·
 [Architecture](#architecture) · [Library](#python-library-and-future-mcp) · [Releases](#installation-and-releases)
 
 ```mermaid
 flowchart LR
-    Markdown["Markdown + course.json"] --> Build[build]
+    Markdown["Markdown + course manifest"] --> Build[build]
     Build --> Imports[".step files"]
     Imports --> Editor["Stepik editor import"]
     Stepik["Stepik author sources"] --> Diff[diff]
@@ -67,8 +67,13 @@ git apply --directory=examples/demo out/review.patch
 stepik-author diff examples/demo --remote examples/demo/remote-edited.json
 ```
 
-The final diff should be empty. Patch paths are relative to the course root;
-omit `--directory` when the course root is also your Git root.
+The final diff should be empty. Paths in the patch are relative to the course root.
+Generated outputs must not alias course sources, the manifest, or CLI input files.
+Such collisions are rejected before writing. Patches retain UTF-8 BOMs and existing
+line endings, including unchanged lines in files with mixed endings.
+Git uses `a/` for the old version and `b/` for the new version. By default,
+`git apply` strips that first path component. Omit `--directory` when the course
+root is also your Git root. [Git patch path handling](https://git-scm.com/docs/git-apply)
 
 | Exit code | `build` | `diff` | `pull` |
 | --- | --- | --- | --- |
@@ -79,7 +84,12 @@ omit `--directory` when the course root is also your Git root.
 ## Authoring
 
 [`examples/demo`](examples/demo) is a complete source-format reference.
-[`course.json`](examples/demo/course.json) declares modules, topics, and ordered steps:
+The [demo manifest](examples/demo/course.json) declares modules, topics, and ordered steps.
+Pass a JSON manifest by any filename. Given a directory, the tool checks the
+preferred filename (default `course.json`), then looks for a single JSON object
+with `version` and `topics`. Snapshots and baselines can live beside it. If two
+manifests match, supply a file path or set `project.manifest_name`. A directory
+without a manifest uses the topic-map adapter.
 
 ```json
 {
@@ -115,7 +125,8 @@ Build can run before platform IDs are assigned.
 | `### Explanation` / `### Объяснение` | Kept locally for the author |
 | Reference solutions and transfer notes | Kept locally for the author |
 
-Number choices consecutively from 1. Answer keys can be `2. explanation`, `1, 3`,
+Number choices consecutively from 1. Matching right-column labels must be unique.
+Answer keys can be `2. explanation`, `1, 3`,
 or numbered bullet entries. Explicit `multiple` / `несколько` metadata supports
 multiple choice with one correct option. Matching uses numbered `Left column` /
 `Левая колонка`, lettered `Right column` / `Правая колонка`, and keys like `1 — B, 2 — A`.
@@ -129,12 +140,58 @@ combined introductions and numeric topic ordering. Use an explicit manifest for
 synchronization. Programming, text-entry, sorting, and custom matching layouts
 outside this format fail with an error.
 
+## Configuration
+
+All three commands accept an explicit TOML file. A profile can add headings,
+change exercise or legacy-map syntax, translate diff messages and configure
+read-only API requests. Each course carries its own settings through compilation,
+comparison and patch generation. The [packaged defaults](src/stepik_author_tools/config/defaults.toml)
+list the available keys and named regex groups.
+
+```toml
+[project]
+manifest_name = "syllabus.json"
+
+[markdown]
+condition = ["Question"]
+
+[markdown.author_sections]
+explanation = ["Author notes"]
+review = ["Editorial review"]
+
+[markdown.patterns]
+option_heading = '(?m)^Item (?P<number>\d+):[ \t]*\r?\n'
+
+[diff.fields]
+answers = "Изменился правильный ответ"
+
+[api]
+max_pages = 200
+timeout = 15
+```
+
+```powershell
+stepik-author diff examples/demo --config author.toml --remote examples/demo/remote-edited.json
+```
+
+Heading aliases extend the bundled English and Russian names. Every heading in
+`markdown.author_sections` ends student-facing content. Other settings override
+their defaults. If you change grading syntax, pair the input patterns with the
+output templates under `markdown.format` so pulled edits use the same notation.
+The tool checks pattern groups when loading the profile and rebuilds each edited
+step before emitting a patch. CommonMark handles headings and fenced code.
+
+The `api` table also sets `base_url` and the allowed resource names. The client
+uses the process's `STEPIK_TOKEN` only for the official HTTPS origin. Library
+callers can pass a separate token explicitly for their own endpoint.
+
 ## Synchronization
 
 An offline `--remote` file can contain a version-1 snapshot or a complete
 `{"step-sources": [...]}` author API export. Include all steps from the selected
 lessons, stable IDs, positions, and grading data. Missing steps are reported;
 student-visible `steps` responses cannot substitute for author answer keys.
+An exported API page with `meta.has_next = true` is rejected as incomplete.
 
 For live reads, set `STEPIK_TOKEN` in your process to an OAuth bearer token with
 author access. Keep credentials out of manifests and command arguments.
@@ -169,6 +226,10 @@ flowchart TD
 Separate paragraph changes can merge. Code blocks, option lists, keys, and pairs
 are atomic; incompatible edits conflict. A conflicting question keeps its entire
 local content and key. Unrelated steps may still appear in the proposed patch.
+Choice options and their numeric answer key are merged as one unit: a key from
+Stepik must not be attached to independently changed local options (or vice versa).
+In the JSON conflict report, `field` identifies the part that needs attention
+(such as `body`, `settings` or `order`), and `reason` explains the conflict.
 
 Changed student content is retained as raw HTML inside Markdown, preserving the
 platform formatting. Author sections stay intact. Each proposed material is
@@ -193,7 +254,10 @@ flowchart TD
     Sync --> Course["course · manifests and legacy maps"]
     Sync --> Markdown["markdown · parsing and HTML semantics"]
     Course --> Markdown
-    Course --> Serialization["serialization · JSON and paths"]
+    CLI --> Config["config · TOML profiles"]
+    Course --> Config
+    API --> Config
+    Course --> Serialization["serialization · files and snapshot input"]
     Sync --> Serialization
     API --> Serialization
     Markdown --> Domain["domain · Pydantic contracts"]
@@ -206,9 +270,10 @@ flowchart TD
 | Package | Responsibility |
 | --- | --- |
 | `domain` | Strict Pydantic models for manifests, API envelopes, snapshots, and results |
-| `serialization` | UTF-8/JSON boundaries, snapshot conversion, path containment |
+| `config` | Packaged TOML defaults, per-course overrides and validation |
+| `serialization` | UTF-8 file I/O and Pydantic decoding of snapshots and Stepik exports |
 | `markdown` | Student/author section boundaries, grading syntax, HTML normalization |
-| `course` | Source loading, stable identity checks, ordered compilation |
+| `course` | Manifest discovery, source path containment, identity checks and ordered compilation |
 | `sync` | Semantic comparison, three-way merging, projection, ordering, Git patches |
 | `api` | Injectable GET transport, pagination, complete author snapshots |
 | `cli` | Argument parsing and presentation of library results |
@@ -227,10 +292,11 @@ The API and synchronization packages do not depend on one another.
 
 ```python
 from stepik_author_tools import (
-    build, compare, load_course, prepare_pull, read_snapshot,
+    build, compare, load_course, load_settings, prepare_pull, read_snapshot,
 )
 
-course = load_course("examples/demo")
+settings = load_settings()  # Pass a TOML path to use a custom profile.
+course = load_course("examples/demo", settings=settings)
 compiled = build(course, "out/import")
 remote = read_snapshot("examples/demo/remote-edited.json")
 changes = compare(course, remote, scope="module-1")
@@ -239,12 +305,13 @@ proposal = prepare_pull(course, remote, read_snapshot("examples/demo/baseline.js
 print(compiled.steps[0].block.name)
 print(proposal.patch)
 print([conflict.model_dump(mode="json") for conflict in proposal.conflicts])
-# Live reads: StepikClient().snapshot(course, scope="module-1")
+# For live reads, use StepikClient(settings=settings.api).snapshot(course, scope="module-1").
 ```
 
-Library records are Pydantic models: access `snapshot.steps`, not dictionary keys.
-Use `model_validate()` for incoming objects and
-`model_dump(mode="json", exclude_unset=True)` for wire-compatible data.
+Library records are Pydantic models. Access `snapshot.steps` for validated rows.
+Semantic step kinds and report fields are string enums in Python and serialize
+to stable JSON strings such as `"choice"` and `"answers"`. Use `model_validate_json()`
+to read wire data and `model_dump(mode="json", exclude_unset=True)` to export it.
 CLI arguments and `.step`/snapshot JSON formats remain compatible; the old
 internal top-level facade modules have been removed. The package ships `py.typed`.
 
@@ -289,15 +356,40 @@ permission is limited to the publishing job. No PyPI credentials are needed.
 A later PyPI channel can use Trusted Publishing once the project name and ownership
 are configured; it would publish the same tested distributions.
 
-## Development and verification
+Release-specific Python logic lives in `.github/scripts/`; workflows orchestrate these
+commands alongside the standard setup and artifact actions. Run the same checks
+locally from the repository root (or an extracted source archive):
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install '.[dev]'
-.\scripts\check.ps1
+python .github/scripts/check_release_tag.py v0.1.0
+python -m build
+python .github/scripts/write_checksums.py dist
+# In a fresh virtual environment:
+python .github/scripts/install_distribution.py '*.whl' --directory dist
+python .github/scripts/verify_install.py
 ```
 
-The script runs Ruff lint/format checks, strict mypy with the Pydantic plugin, and
-pytest. CI covers Python 3.11–3.13 on Windows and Ubuntu, plus minimum runtime
+`check_release_tag.py` also accepts `RELEASE_TAG`, and `install_distribution.py`
+accepts `DISTRIBUTION`, for shell-independent CI calls. Checksum generation includes
+only `.whl` and `.tar.gz` files and can be repeated safely. `verify_install.py`
+rejects editable/source-tree imports so delivery tests exercise the built package.
+These scripts are included in the source archive and checked by Ruff and mypy.
+
+## Development and verification
+
+Activate the project's virtual environment, then run from the repository root:
+
+```powershell
+python -m pip install -e '.[dev]'
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy
+python -m pytest -q
+```
+
+These commands work on Windows, Linux and macOS. CI runs the same Ruff lint/format
+checks, strict mypy with the Pydantic plugin, and pytest. It covers Python 3.11–3.13
+on Windows and Ubuntu, plus minimum runtime
 dependencies. Tests use synthetic data and injected HTTP transport. They exercise
 actual patch application, concurrent edits, output contracts, and the installed
 CLI. Course Markdown is excluded from code formatting.

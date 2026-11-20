@@ -59,3 +59,32 @@ def test_deletion_and_cross_topic_moves_are_review_only(project: Course) -> None
     remote.steps[0].lesson = 999999
     proposal = prepare_pull(project, remote, baseline(project))
     assert len(proposal.conflicts) == 2 and not proposal.patch
+
+
+def test_concurrent_option_reorder_and_answer_edit_conflict(project: Course) -> None:
+    base = baseline(project)
+    remote = snapshot(project)
+    options = source_of(remote.steps[1].block).options
+    options[0].is_correct = False
+    options[1].is_correct = True
+    path = project.root / "single.md"
+    material = Material(path.read_text(encoding="utf-8"))
+    material.replace("options", '1. [1, 2]\n2. "42"\n3. 42')
+    material.replace("answer", "3")
+    path.write_text(material.text, encoding="utf-8")
+    proposal = prepare_pull(project, remote, base)
+    assert proposal.conflicts and not proposal.patch
+
+
+def test_remote_key_cannot_attach_to_locally_edited_option(project: Course) -> None:
+    base = baseline(project)
+    remote = snapshot(project)
+    options = source_of(remote.steps[1].block).options
+    options[0].is_correct = False
+    options[1].is_correct = True
+    path = project.root / "single.md"
+    material = Material(path.read_text(encoding="utf-8"))
+    material.replace("options", "1. 42\n2. None\n3. [1, 2]")
+    path.write_text(material.text, encoding="utf-8")
+    proposal = prepare_pull(project, remote, base)
+    assert proposal.conflicts and not proposal.patch

@@ -1,24 +1,22 @@
 """Read-only Stepik HTTP client with injectable transport and bounded pagination."""
 
-import json
 import os
 from typing import Protocol, TypeAlias
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from pydantic import TypeAdapter
+from pydantic import ConfigDict, TypeAdapter
 
-from ..domain.models import JsonObject, PositiveId, Snapshot, TopicSpec
-from ..domain.stepik import LessonSteps, PageMetadata
-from ..serialization.jsonio import array_value, object_value
-from ..serialization.snapshots import normalize_snapshot
+from ..config import load_settings
+from ..config.settings import ApiSettings
+from ..domain.models import JsonObject, PositiveId, Snapshot, StepRecord, TopicSpec
+from ..domain.stepik import AuthorStep, LessonSteps, PageMetadata
 
 QueryValue: TypeAlias = str | int | bool | list[str | int]
-_RESOURCES = {"courses", "sections", "units", "lessons", "steps", "step-sources"}
-_API_ROOT = "https://stepik.org/api/"
-_MAX_PAGES = 10_000
 _API_ID = TypeAdapter(PositiveId)
+_RESPONSE = TypeAdapter(JsonObject)
+_ROWS = TypeAdapter(list[JsonObject], config=ConfigDict(hide_input_in_errors=True))
 
 
 class Transport(Protocol):
@@ -64,21 +62,30 @@ class StepikClient:
     """Fetch public/author resources without any POST, PUT or DELETE capability."""
 
     def __init__(
-        self, token: str | None = None, timeout: float = 30, *, transport: Transport | None = None
+        self,
+        token: str | None = None,
+        timeout: float | None = None,
+        *,
+        transport: Transport | None = None,
+        settings: ApiSettings | None = None,
     ) -> None:
-        self.token = token if token is not None else os.environ.get("STEPIK_TOKEN")
-        self.timeout = timeout
+        defaults = load_settings().api
+        self.settings = settings or defaults
+        url = self.settings.base_url
+        # A course profile can select a mirror. Ambient Stepik credentials belong to Stepik.
+        official = (url.host, url.port) == (defaults.base_url.host, defaults.base_url.port)
+        self.token = os.environ.get("STEPIK_TOKEN") if token is None and official else token
+        self.timeout = self.settings.timeout if timeout is None else timeout
         self.transport = transport if transport is not None else UrllibTransport()
 
     def _page(self, path: str, query: dict[str, QueryValue]) -> JsonObject:
         headers = {"Accept": "application/json", "User-Agent": "stepik-author-tools/0.1"}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
-        request = Request(_API_ROOT + path + "?" + urlencode(query, doseq=True), headers=headers)
+        base = str(self.settings.base_url).rstrip("/")
+        request = Request(f"{base}/{path}?{urlencode(query, doseq=True)}", headers=headers)
         try:
-            return object_value(
-                json.loads(self.transport.get(request, self.timeout)), "API response"
-            )
+            return _RESPONSE.validate_json(self.transport.get(request, self.timeout), strict=True)
         except HTTPError as error:
             # Response bodies and exception strings may contain credentials/content.
             raise ValueError(
@@ -92,23 +99,21 @@ class StepikClient:
         self, resource: str, object_id: int | None = None, **params: QueryValue
     ) -> list[JsonObject]:
         """Read a supported resource, following all pages with no fixed page-size assumption."""
-        if resource not in _RESOURCES:
+        if resource not in self.settings.resources:
             raise ValueError("Unsupported API resource")
         if object_id is not None:
             _API_ID.validate_python(object_id, strict=True)
         path = resource + (f"/{object_id}" if object_id is not None else "")
         result: list[JsonObject] = []
-        for page in range(1, _MAX_PAGES + 1):
+        for page in range(1, self.settings.max_pages + 1):
             data = self._page(path, dict(params, page=page))
-            result.extend(
-                object_value(row, resource) for row in array_value(data.get(resource), resource)
-            )
+            result.extend(_ROWS.validate_python(data.get(resource), strict=True))
             meta = PageMetadata.model_validate(data.get("meta", {}))
             if not meta.has_next:
                 return result
         raise ValueError("Stepik pagination did not terminate")
 
-    def _lesson_sources(self, lesson_id: int) -> list[JsonObject]:
+    def _lesson_sources(self, lesson_id: int) -> list[StepRecord]:
         lessons = self.get("lessons", lesson_id)
         if len(lessons) != 1:
             raise ValueError("Lesson unavailable")
@@ -117,15 +122,15 @@ class StepikClient:
             sources = self.get("step-sources", step_id)
             if len(sources) != 1:
                 raise ValueError("Author step source unavailable; refusing an incomplete snapshot")
-            rows.extend(sources)
+            rows.append(AuthorStep.model_validate(sources[0]).to_record())
         return rows
 
     def snapshot(self, course: TopicProvider, scope: str | None = None) -> Snapshot:
         """Fetch every selected lesson's author source without falling back to student data."""
-        rows: list[JsonObject] = []
+        rows: list[StepRecord] = []
         for topic in course.topics(scope):
             lesson_id = topic.lesson_id
             if not lesson_id:
                 raise ValueError("Live comparison requires lesson_id in every selected topic")
             rows.extend(self._lesson_sources(lesson_id))
-        return normalize_snapshot({"step-sources": rows})
+        return Snapshot(version=1, steps=rows)

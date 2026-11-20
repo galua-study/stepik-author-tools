@@ -1,12 +1,14 @@
 """Load source projects, validate identities and compile selected course materials."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..config import Settings, load_settings
 from ..domain.models import Manifest, StepRecord, StepSpec, TopicSpec
 from ..markdown.material import Material
-from ..serialization.jsonio import contained, load_json, read
+from ..serialization.files import read_text
 from .legacy import load_legacy
+from .manifests import find_manifest
 
 
 @dataclass
@@ -16,6 +18,29 @@ class Course:
     root: Path
     manifest: Manifest
     manifest_path: Path | None = None
+    settings: Settings = field(default_factory=load_settings)
+
+    def input_paths(self) -> list[Path]:
+        """List all owned sources and maps, including sources outside the selected scope."""
+        paths = [
+            self.source_path(path)
+            for topic in self.manifest.topics
+            for step in topic.steps
+            for path in step.source_paths()
+        ]
+        if self.manifest_path is not None:
+            paths.append(self.manifest_path)
+        else:
+            paths.extend(self.root.glob("README.md"))
+            paths.extend(self.root.glob("*/README.md"))
+        return paths
+
+    def source_path(self, relative: str) -> Path:
+        """Resolve a Markdown path inside the course, including symlink resolution."""
+        path = (self.root / relative).resolve()
+        if not path.is_relative_to(self.root.resolve()):
+            raise ValueError(f"Source escapes project root: {relative}")
+        return path
 
     def topics(self, scope: str | None = None) -> list[TopicSpec]:
         """Select all topics, an exact topic ID, or an exact module ID."""
@@ -30,11 +55,12 @@ class Course:
 
     def _compile_step(self, topic: TopicSpec, step: StepSpec, position: int) -> StepRecord:
         paths = step.source_paths()
-        texts = [read(contained(self.root, path)) for path in paths]
-        if len(paths) > 1 and any(Material(text).task for text in texts):
+        texts = [read_text(self.source_path(path)) for path in paths]
+        dialect = self.settings.markdown
+        if len(paths) > 1 and any(Material(text, dialect).task for text in texts):
             raise ValueError("Only text lessons may combine multiple source files")
         try:
-            block = Material("\n\n".join(texts)).compile()
+            block = Material("\n\n".join(texts), dialect).compile()
         except ValueError as error:
             raise ValueError(f"{paths[0]}: {error}") from error
         return StepRecord(
@@ -77,21 +103,22 @@ def _validate_identities(course: Course) -> None:
             if (remote_id := step.stepik_id) is not None:
                 _check_unique(remote_id, remote_ids, "Stepik ID")
             for relative in step.source_paths():
-                path = contained(course.root, relative)
+                path = course.source_path(relative)
                 if path in paths:
                     raise ValueError("Each source file must belong to exactly one step")
                 paths.add(path)
 
 
-def load_course(path: str | Path) -> Course:
+def load_course(path: str | Path, *, settings: Settings | None = None) -> Course:
     """Read a manifest or legacy map, enforcing path containment and unique identities."""
     path = Path(path).resolve()
-    if path.is_dir() and (path / "course.json").exists():
-        path /= "course.json"
-    if path.suffix == ".json":
-        course = Course(path.parent, Manifest.model_validate(load_json(path)), path)
+    settings = settings or load_settings()
+    manifest_path = find_manifest(path, settings.project.manifest_name)
+    if manifest_path is not None:
+        manifest = Manifest.model_validate_json(read_text(manifest_path))
+        course = Course(manifest_path.parent, manifest, manifest_path, settings)
     else:
-        root, manifest = load_legacy(path.parent if path.is_file() else path)
-        course = Course(root, manifest)
+        root, manifest = load_legacy(path.parent if path.is_file() else path, settings.maps)
+        course = Course(root, manifest, settings=settings)
     _validate_identities(course)
     return course

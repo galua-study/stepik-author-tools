@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import TypeVar
 
+from ..domain.enums import SemanticField
 from ..domain.models import Conflict, SemanticStep
 from ..markdown.markup import blocks
-from ..serialization.jsonio import json_value
 
 T = TypeVar("T")
 
@@ -64,36 +64,21 @@ def merge_body(base: str, local: str, remote: str) -> tuple[str, bool]:
     return "".join(original), False
 
 
-def make_conflict(
-    step_id: str, field: str, base: object = None, local: object = None, remote: object = None
-) -> Conflict:
-    """Create a serializable conflict record without losing three-way evidence."""
-    return Conflict(
-        step_id=step_id,
-        field=field,
-        base=json_value(base),
-        local=json_value(local),
-        remote=json_value(remote),
-    )
-
-
 def _merge_field(
-    step_id: str,
-    field: str,
+    field: SemanticField,
     base: T,
     local: T,
     remote: T,
-    conflicts: list[Conflict],
+    conflicts: dict[SemanticField, str],
     *,
     editable: bool = True,
     merge: Callable[[T, T, T], tuple[T, bool]] = merge_value,
 ) -> T:
     value, clash = merge(base, local, remote)
     if clash:
-        conflicts.append(make_conflict(step_id, field, base, local, remote))
+        conflicts[field] = "Changed locally and on Stepik"
     elif not editable and value != local:
-        message = field + " has no editable Markdown representation"
-        conflicts.append(make_conflict(step_id, message, base, local, remote))
+        conflicts[field] = "No editable Markdown representation"
     return value
 
 
@@ -101,26 +86,41 @@ def merge_semantics(
     step_id: str, base: SemanticStep, local: SemanticStep, remote: SemanticStep
 ) -> tuple[SemanticStep, list[Conflict]]:
     """Merge typed fields; callers discard the entire step if any field conflicts."""
-    conflicts: list[Conflict] = []
+    conflicts: dict[SemanticField, str] = {}
+    # Keys address option positions: a key from one side cannot safely refer to
+    # an independently edited option list on the other side.
+    _, grading_clash = merge_value(
+        (base.options, base.answers),
+        (local.options, local.answers),
+        (remote.options, remote.answers),
+    )
+    if grading_clash:
+        conflicts[SemanticField.OPTIONS] = "Options and their answer key changed on both sides"
     if base.kind != local.kind or local.kind != remote.kind:
         return local, [
-            make_conflict(step_id, "step type change", base.kind, local.kind, remote.kind)
+            Conflict(
+                step_id=step_id,
+                field=SemanticField.KIND,
+                reason="Step type changed",
+                base=base.kind,
+                local=local.kind,
+                remote=remote.kind,
+            )
         ]
     merged = SemanticStep(
         kind=local.kind,
         body=_merge_field(
-            step_id, "body", base.body, local.body, remote.body, conflicts, merge=merge_body
+            SemanticField.BODY, base.body, local.body, remote.body, conflicts, merge=merge_body
         ),
         options=_merge_field(
-            step_id, "options", base.options, local.options, remote.options, conflicts
+            SemanticField.OPTIONS, base.options, local.options, remote.options, conflicts
         ),
         answers=_merge_field(
-            step_id, "answers", base.answers, local.answers, remote.answers, conflicts
+            SemanticField.ANSWERS, base.answers, local.answers, remote.answers, conflicts
         ),
-        pairs=_merge_field(step_id, "pairs", base.pairs, local.pairs, remote.pairs, conflicts),
+        pairs=_merge_field(SemanticField.PAIRS, base.pairs, local.pairs, remote.pairs, conflicts),
         settings=_merge_field(
-            step_id,
-            "settings",
+            SemanticField.SETTINGS,
             base.settings,
             local.settings,
             remote.settings,
@@ -128,8 +128,7 @@ def merge_semantics(
             editable=False,
         ),
         feedback=_merge_field(
-            step_id,
-            "feedback",
+            SemanticField.FEEDBACK,
             base.feedback,
             local.feedback,
             remote.feedback,
@@ -137,4 +136,17 @@ def merge_semantics(
             editable=False,
         ),
     )
-    return merged, conflicts
+    if not conflicts:
+        return merged, []
+    previous, current, online = base.to_dict(), local.to_dict(), remote.to_dict()
+    return merged, [
+        Conflict(
+            step_id=step_id,
+            field=field,
+            reason=reason,
+            base=previous[field],
+            local=current[field],
+            remote=online[field],
+        )
+        for field, reason in conflicts.items()
+    ]

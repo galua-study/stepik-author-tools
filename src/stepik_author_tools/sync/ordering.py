@@ -1,10 +1,9 @@
 """Merge within-topic order using stable identities rather than old positions."""
 
-from copy import deepcopy
-
 from ..course.project import Course
+from ..domain.enums import StructureField
 from ..domain.models import Conflict, Manifest, Snapshot, StepRecord, TopicSpec
-from .merge import make_conflict, merge_value
+from .merge import merge_value
 from .semantic import platform_id
 
 
@@ -29,7 +28,16 @@ def _merged_topic_order(
         return None, []  # Additions/deletions/cross-topic moves are reviewed by pull.
     order, clash = merge_value(base_ids, local_ids, remote_ids)
     if clash:
-        return None, [make_conflict(topic.id, "order", base_ids, local_ids, remote_ids)]
+        return None, [
+            Conflict(
+                step_id=topic.id,
+                field=StructureField.ORDER,
+                reason="Incompatible step order",
+                base=[*base_ids],
+                local=[*local_ids],
+                remote=[*remote_ids],
+            )
+        ]
     return (order if order != local_ids else None), []
 
 
@@ -41,7 +49,7 @@ def merge_order(
     scope: str | None,
 ) -> tuple[Manifest | None, list[Conflict]]:
     """Return an updated manifest, leaving all ambiguous structural edits for review."""
-    manifest = deepcopy(course.manifest)
+    manifest = course.manifest.model_copy(deep=True)
     conflicts: list[Conflict] = []
     changed = False
     for topic in course.topics(scope):
@@ -50,7 +58,13 @@ def merge_order(
         if order is None:
             continue
         if course.manifest_path is None:
-            conflicts.append(make_conflict(topic.id, "order requires an explicit course.json"))
+            conflicts.append(
+                Conflict(
+                    step_id=topic.id,
+                    field=StructureField.ORDER,
+                    reason="Reordering requires an explicit course manifest",
+                )
+            )
             continue
         target = next(item for item in manifest.topics if item.id == topic.id)
         by_id = {step.stepik_id: step for step in target.steps}
