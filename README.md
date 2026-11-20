@@ -121,7 +121,12 @@ field are deliberately not guessed. No baseline means no three-way pull.
 
 ```python
 from stepik_author_tools import (
-    load_course, build, read_snapshot, compare, prepare_pull, StepikClient,
+    load_course,
+    build,
+    read_snapshot,
+    compare,
+    prepare_pull,
+    StepikClient,
 )
 
 course = load_course("examples/demo")
@@ -153,10 +158,22 @@ absent here. Refer also to [Stepik API docs](https://stepik.org/api/docs/).
 See [VALIDATION.md](VALIDATION.md) for the actual verification boundary. Synthetic
 tests are not evidence of live editor acceptance or live author authorization.
 
+## Development
+
+Implementation is separated into packages under `src/stepik_author_tools`:
+`domain`, `serialization`, `markdown`, `course`, `sync`, `api` and `cli`.
+See [the architecture guide](docs/architecture.md) for responsibilities, dependencies
+and the merge invariants. Public library calls and CLI arguments remain compatible.
+
 ```powershell
-.\.venv\Scripts\python.exe -m pip install '.[test]'
-.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pip install '.[dev]'
+.\scripts\check.ps1
 ```
+
+The check script runs `ruff check .`, `ruff format --check .`, strict `mypy` and
+`pytest`. All four checks are required in CI. Ruff also enforces documented public
+functions, annotations and limits on function complexity. Type checking includes
+the source packages, demo script and tests; downstream users receive `py.typed`.
 
 Keep real course manifests, `.step` files, snapshots, patches and tokens outside
 public repositories. They may contain unpublished lessons and answer keys.

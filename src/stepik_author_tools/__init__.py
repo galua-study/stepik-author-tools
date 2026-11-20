@@ -1,8 +1,18 @@
 """Public, CLI-independent authoring operations."""
 
-from .project import load_course
-from .operations import build, compare, prepare_pull, save_baseline
-from .remote import StepikClient, read_snapshot
+from .api.client import StepikClient
+from .course.project import load_course
+from .serialization.schemas import read_snapshot
+from .sync.build import build, save_baseline
+from .sync.comparison import compare
+from .sync.pull import prepare_pull
 
-__all__ = ["load_course", "build", "compare", "prepare_pull", "save_baseline",
-           "StepikClient", "read_snapshot"]
+__all__ = [
+    "load_course",
+    "build",
+    "compare",
+    "prepare_pull",
+    "save_baseline",
+    "StepikClient",
+    "read_snapshot",
+]

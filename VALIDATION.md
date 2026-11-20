@@ -47,3 +47,21 @@ that direct REST writes or a new editor import have been verified.
 
 The public API references are linked in the README. The project intentionally
 provides read-only network access and reviewable local patches.
+
+## Package refactor verification
+
+The implementation now has seven responsibility-based packages inside `src`.
+Ruff linting (including annotations, public docstrings and complexity limits),
+Ruff formatting and strict mypy pass for all 39 Python files in the library,
+CLI, demo script and tests. There are no blanket type/lint suppressions.
+
+All 35 tests pass, including the original workflow checks, exact comparison with
+the pre-refactor demo snapshot, the CLI JSON difference contract, and malformed
+manifest/snapshot validation. Transport tests use an injected protocol; live HTTP
+is blocked automatically during tests. Course Markdown is excluded from formatting
+so code-fence whitespace cannot be changed as a side effect of a quality check.
+
+The refactor is also verified from a wheel in a fresh environment, including the
+three demo commands and `git apply --check`. The wheel includes all implementation
+packages and the `py.typed` marker. This refactor does not extend the live API
+verification claims recorded above.

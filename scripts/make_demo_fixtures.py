@@ -4,20 +4,38 @@ from copy import deepcopy
 from pathlib import Path
 
 from stepik_author_tools import load_course, save_baseline
-from stepik_author_tools.operations import write_json
+from stepik_author_tools.domain.models import Snapshot
+from stepik_author_tools.serialization.jsonio import write_json
 
-root = Path(__file__).resolve().parents[1] / "examples" / "demo"
-course = load_course(root)
-original = dict(version=1, steps=course.compile())
-write_json(root / "remote-base.json", original)
-save_baseline(course, original, root / "baseline.json")
-remote = deepcopy(original)
-steps = {s["id"]: s for s in remote["steps"]}
-steps["single"]["block"]["text"] = steps["single"]["block"]["text"].replace("an integer?", "a string?")
-options = steps["single"]["block"]["source"]["options"]
-options[0]["is_correct"], options[1]["is_correct"] = False, True
-steps["code"]["block"]["text"] = steps["code"]["block"]["text"].replace("print(twice(3))", "print(twice(4))")
-steps["code"]["position"], steps["practice"]["position"] = 6, 5
-# Harmless editor wrappers must not appear as a change.
-steps["welcome"]["block"]["text"] = '<div class="editor">' + steps["welcome"]["block"]["text"] + '</div>'
-write_json(root / "remote-edited.json", remote)
+
+def edited_snapshot(original: Snapshot) -> Snapshot:
+    """Apply the demonstration edits while retaining stable IDs and original sources."""
+    remote = deepcopy(original)
+    steps = {step["id"]: step for step in remote["steps"]}
+    single = steps["single"]["block"]
+    single["text"] = single["text"].replace("an integer?", "a string?")
+    source = single.get("source")
+    assert source is not None
+    options = source["options"]
+    options[0]["is_correct"], options[1]["is_correct"] = False, True
+    code = steps["code"]["block"]
+    code["text"] = code["text"].replace("print(twice(3))", "print(twice(4))")
+    steps["code"]["position"], steps["practice"]["position"] = 6, 5
+    # Harmless editor wrappers must not appear as a semantic difference.
+    welcome = steps["welcome"]["block"]
+    welcome["text"] = '<div class="editor">' + welcome["text"] + "</div>"
+    return remote
+
+
+def main() -> None:
+    """Write reproducible fixtures for the repository's original demo course."""
+    root = Path(__file__).resolve().parents[1] / "examples" / "demo"
+    course = load_course(root)
+    original: Snapshot = {"version": 1, "steps": course.compile()}
+    write_json(root / "remote-base.json", original)
+    save_baseline(course, original, root / "baseline.json")
+    write_json(root / "remote-edited.json", edited_snapshot(original))
+
+
+if __name__ == "__main__":
+    main()

@@ -2,3 +2,5 @@ include README.md VALIDATION.md LICENSE
 recursive-include examples/demo *.md *.json
 recursive-include tests *.py
 include scripts/make_demo_fixtures.py
+include scripts/check.ps1
+recursive-include docs *.md
