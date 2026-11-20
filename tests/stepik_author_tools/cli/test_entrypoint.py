@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 from stepik_author_tools.course.project import Course
@@ -11,7 +12,7 @@ from tests.helpers import DEMO
 
 def _run_cli(arguments: list[str], cwd: Path, expected: int = 0) -> str:
     name = "stepik-author.exe" if sys.platform == "win32" else "stepik-author"
-    executable = Path(sys.executable).with_name(name)
+    executable = Path(sysconfig.get_path("scripts")) / name
     result = subprocess.run(
         [str(executable), *arguments], cwd=cwd, capture_output=True, text=True, encoding="utf-8"
     )
