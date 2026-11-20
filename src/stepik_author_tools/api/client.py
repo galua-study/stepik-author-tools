@@ -2,8 +2,7 @@
 
 import json
 import os
-from http.client import HTTPMessage
-from typing import IO, Protocol, TypeAlias
+from typing import Protocol, TypeAlias
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -41,10 +40,8 @@ class TopicProvider(Protocol):
 class NoRedirect(HTTPRedirectHandler):
     """Refuse redirects so author credentials cannot be forwarded to another host."""
 
-    def redirect_request(
-        self, req: Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str
-    ) -> None:
-        """Disable urllib's default redirect handling."""
+    def redirect_request(self, *_args: object, **_kwargs: object) -> None:
+        """Decline every redirect, regardless of its status or destination."""
         return None
 
 

@@ -15,7 +15,7 @@ def json_value(value: object) -> JsonValue:
         return json_value(value.model_dump(mode="json", exclude_unset=True))
     if value is None or isinstance(value, str | bool | int | float):
         return value
-    if isinstance(value, list | tuple):
+    if isinstance(value, (list, tuple)):
         return [json_value(item) for item in value]
     if isinstance(value, Mapping):
         result: JsonObject = {}

@@ -2,7 +2,7 @@
 
 import shutil
 from pathlib import Path
-from urllib.request import Request
+from unittest.mock import Mock
 
 import pytest
 
@@ -12,13 +12,10 @@ from stepik_author_tools.course.project import Course
 from tests.helpers import DEMO
 
 
-def _reject_network(self: UrllibTransport, request: Request, timeout: float) -> bytes:
-    raise AssertionError("Tests must inject a fake HTTP transport")
-
-
 @pytest.fixture(autouse=True)
 def prevent_live_requests(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(UrllibTransport, "get", _reject_network)
+    blocked = Mock(side_effect=AssertionError("Tests must inject a fake HTTP transport"))
+    monkeypatch.setattr(UrllibTransport, "get", blocked)
 
 
 @pytest.fixture

@@ -8,25 +8,27 @@ from urllib.request import Request
 import pytest
 
 from stepik_author_tools import StepikClient
-from stepik_author_tools.domain.models import JsonObject, TopicSpec
+from stepik_author_tools.course.project import Course
+from stepik_author_tools.domain.models import JsonObject
+
+_RECAP_SOURCE: JsonObject = {
+    "step-sources": [
+        {"id": 910007, "lesson": 900002, "position": 1, "block": {"name": "text", "text": "Hi"}}
+    ]
+}
 
 
 class FakeTransport:
     def __init__(self, pages: list[JsonObject | Exception]) -> None:
         self.pages = iter(pages)
-        self.requests: list[Request] = []
+        self.calls: list[tuple[Request, float]] = []
 
     def get(self, request: Request, timeout: float) -> bytes:
-        self.requests.append(request)
+        self.calls.append((request, timeout))
         page = next(self.pages)
         if isinstance(page, Exception):
             raise page
         return json.dumps(page).encode()
-
-
-class FakeCourse:
-    def topics(self, scope: str | None = None) -> list[TopicSpec]:
-        return [TopicSpec(id="example", lesson_id=1, steps=[])]
 
 
 def test_pagination_and_get_only() -> None:
@@ -36,10 +38,13 @@ def test_pagination_and_get_only() -> None:
             {"lessons": [{"id": 2}], "meta": {"has_next": False}},
         ]
     )
-    client = StepikClient(token="synthetic-test-token", transport=transport)
+    client = StepikClient(token="synthetic-test-token", timeout=2.5, transport=transport)
     assert len(client.get("lessons")) == 2
-    assert "page=2" in transport.requests[1].full_url
-    assert all(request.get_method() == "GET" for request in transport.requests)
+    assert "page=2" in transport.calls[1][0].full_url
+    assert [(request.get_method(), timeout) for request, timeout in transport.calls] == [
+        ("GET", 2.5),
+        ("GET", 2.5),
+    ]
 
 
 def test_access_error_never_echoes_response_or_token() -> None:
@@ -50,37 +55,32 @@ def test_access_error_never_echoes_response_or_token() -> None:
     assert "private-test-value" not in str(caught.value)
 
 
-def test_snapshot_fetches_every_source_and_refuses_missing() -> None:
+def test_snapshot_fetches_every_source_and_refuses_missing(project: Course) -> None:
     transport = FakeTransport(
         [
-            {"lessons": [{"id": 1, "steps": [2, 3]}]},
-            {
-                "step-sources": [
-                    {"id": 2, "lesson": 1, "position": 1, "block": {"name": "text", "text": "Hi"}}
-                ]
-            },
+            {"lessons": [{"id": 900002, "steps": [910007, 910008]}]},
+            _RECAP_SOURCE,
             {"step-sources": []},
         ]
     )
     client = StepikClient(transport=transport)
     with pytest.raises(ValueError, match="incomplete"):
-        client.snapshot(FakeCourse())
+        client.snapshot(project, scope="recap")
 
 
-def test_successful_author_snapshot_uses_injected_transport() -> None:
+def test_successful_author_snapshot_uses_injected_transport(project: Course) -> None:
     transport = FakeTransport(
         [
-            {"lessons": [{"id": 1, "steps": [2]}]},
-            {
-                "step-sources": [
-                    {"id": 2, "lesson": 1, "position": 1, "block": {"name": "text", "text": "Hi"}}
-                ]
-            },
+            {"lessons": [{"id": 900002, "steps": [910007]}]},
+            _RECAP_SOURCE,
         ]
     )
-    snapshot = StepikClient(transport=transport).snapshot(FakeCourse())
-    assert snapshot.steps[0].stepik_id == 2
-    assert len(transport.requests) == 2
+    snapshot = StepikClient(transport=transport).snapshot(project, scope="recap")
+    assert snapshot.steps[0].stepik_id == 910007
+    assert [request.full_url for request, _ in transport.calls] == [
+        "https://stepik.org/api/lessons/900002?page=1",
+        "https://stepik.org/api/step-sources/910007?page=1",
+    ]
 
 
 def test_malformed_pagination_flag_is_not_treated_as_truthy() -> None:

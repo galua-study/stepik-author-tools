@@ -1,24 +1,21 @@
 """Project merged semantic values back into an existing author document."""
 
-from bs4 import BeautifulSoup
-
 from ..domain.models import SemanticStep
-from ..markdown.markup import blocks, canonical
+from ..markdown.markup import blocks
 from ..markdown.material import Material
 from .semantic import semantic_block
 
 
 def _student_body(material: Material, local: str, merged: str) -> str:
-    if not material.task:
-        return merged
-    soup = BeautifulSoup(merged, "html.parser")
-    old = BeautifulSoup(local, "html.parser")
-    if not soup.contents or not old.contents:
-        raise ValueError("Exercise title change requires manual review")
-    if canonical(str(soup.contents[0])) != canonical(str(old.contents[0])):
-        raise ValueError("Exercise title change requires manual review")
-    soup.contents[0].extract()
-    return str(soup)
+    merged_blocks = blocks(merged)
+    if material.task:
+        local_blocks = blocks(local)
+        if not merged_blocks or not local_blocks or merged_blocks[0] != local_blocks[0]:
+            raise ValueError("Exercise title change requires manual review")
+        # The task heading comes from its own Markdown line, outside the condition.
+        merged_blocks = merged_blocks[1:]
+    # A blank line separates CommonMark HTML blocks, including multiline code.
+    return "\n\n".join(merged_blocks)
 
 
 def _replace_pairs(material: Material, pairs: tuple[tuple[str, str], ...]) -> None:
@@ -39,10 +36,7 @@ def project_material(original: str, local: SemanticStep, merged: SemanticStep) -
     """
     material = Material(original)
     if merged.body != local.body:
-        body = _student_body(material, local.body, merged.body)
-        # Each pre must start on a new block; otherwise CommonMark ends an ordinary
-        # HTML block on an internal blank line and parses the remaining code as prose.
-        material.replace_body("\n\n".join(blocks(body)))
+        material.replace_body(_student_body(material, local.body, merged.body))
     if merged.options != local.options:
         material.replace(
             "options", "\n".join(f"{i}. {value}" for i, value in enumerate(merged.options, 1))

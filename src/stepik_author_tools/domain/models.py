@@ -1,6 +1,6 @@
 """Validated Pydantic contracts for author sources and synchronization results."""
 
-from typing import Annotated, Literal, Self, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Literal, Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from pydantic import JsonValue as JsonValue
@@ -36,7 +36,10 @@ class ExtensibleModel(DomainModel):
     """Retain JSON extension fields from Stepik instead of hiding unknown settings."""
 
     model_config = ConfigDict(extra="allow")
-    __pydantic_extra__: JsonObject
+    # Pydantic reads this runtime annotation to validate extra values. Its base
+    # class already declares the storage as an internal, non-constructor attribute.
+    if not TYPE_CHECKING:
+        __pydantic_extra__: JsonObject
 
 
 class ChoiceOption(ExtensibleModel):
@@ -61,7 +64,7 @@ class StepSource(ExtensibleModel):
     pairs: list[MatchingPair] = Field(default_factory=list)
     is_multiple_choice: bool = False
     is_always_correct: bool = False
-    sample_size: Annotated[int, Field(ge=0)] = 0
+    sample_size: int = Field(default=0, ge=0)
     preserve_order: bool = False
     is_html_enabled: bool = False
     is_options_feedback: bool = False

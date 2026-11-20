@@ -20,6 +20,16 @@ def _run_cli(arguments: list[str], cwd: Path, expected: int = 0) -> str:
     return result.stdout
 
 
+def test_module_entry_point_from_tests_directory() -> None:
+    # IDE runners can put the test tree ahead of the installed package on sys.path.
+    subprocess.run(
+        [sys.executable, "-m", "stepik_author_tools.cli", "--help"],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        check=True,
+    )
+
+
 def test_installed_cli_build_diff_pull(project: Course, tmp_path: Path) -> None:
     output = tmp_path / "import"
     _run_cli(["build", str(project.root), "--out", str(output)], tmp_path)

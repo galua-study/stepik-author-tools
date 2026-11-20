@@ -102,7 +102,16 @@ def canonical(value: str) -> str:
 
 def blocks(value: str) -> list[str]:
     """Split normalized HTML into atomic merge units (paragraphs, code blocks, etc.)."""
-    return [str(node) for node in BeautifulSoup(canonical(value), "html.parser").contents]
+    parts: list[str] = []
+    for node in BeautifulSoup(canonical(value), "html.parser").contents:
+        if isinstance(node, Tag):
+            parts.append(node.decode())
+        elif isinstance(node, NavigableString):
+            # Escape literal angle brackets and ampersands before reassembling the HTML.
+            parts.append(node.output_ready())
+        else:
+            raise ValueError(f"Unsupported HTML node: {type(node).__name__}")
+    return parts
 
 
 def code_blocks(value: str) -> list[str]:
