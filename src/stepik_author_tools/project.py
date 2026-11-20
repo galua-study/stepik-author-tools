@@ -62,7 +62,11 @@ def load_course(path: str | Path) -> Course:
     else:
         directory = path.parent if path.is_file() else path
         maps = [directory / "README.md"] if (directory / "README.md").exists() else []
-        maps += sorted(directory.glob("*/README.md"))
+        # Topic 2 precedes Topic 10 when a legacy module has no manifest.
+        maps += sorted(directory.glob("*/README.md"), key=lambda p: [
+            (0, int(part)) if part.isdigit() else (1, part.casefold())
+            for part in re.split(r"(\d+)", p.parent.name)
+        ])
         topics = []
         # Root allows a topic introduction composed from parent module files.
         root = directory.parent if re.match(r"Тема\s", directory.name) else directory

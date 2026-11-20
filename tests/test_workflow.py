@@ -205,3 +205,13 @@ def test_deletion_and_cross_topic_moves_are_review_only(project):
     remote["steps"][0]["lesson"] = 999999
     proposal = prepare_pull(project, remote, baseline(project))
     assert len(proposal.conflicts) == 2 and not proposal.patch
+
+
+def test_legacy_module_orders_topics_numerically(tmp_path):
+    for number in (10, 2, 1):
+        topic = tmp_path / f"Тема {number}. Demo"
+        topic.mkdir()
+        (topic / "lesson.md").write_text(f"# Lesson {number}\n", encoding="utf-8")
+        (topic / "README.md").write_text("| 1 | [Lesson](<lesson.md>) | text |", encoding="utf-8")
+    course = load_course(tmp_path)
+    assert [t["id"] for t in course.topics()] == [f"Тема {i}. Demo" for i in (1, 2, 10)]

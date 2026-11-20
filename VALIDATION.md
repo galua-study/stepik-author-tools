@@ -4,7 +4,7 @@ Verified on 2026-11-20, Windows / PowerShell, CPython 3.12.
 
 The package was built as wheel and sdist. The wheel was installed into a second,
 fresh virtual environment (not an editable checkout); `pip check` succeeded,
-all **21 tests passed**, and build/diff/pull ran using the installed CLI. The demo
+all **22 tests passed**, and build/diff/pull ran using the installed CLI. The demo
 pull produced three file changes and zero conflicts; `git apply --check` passed.
 
 ## Offline and local checks
