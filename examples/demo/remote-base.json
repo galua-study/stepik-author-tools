@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "steps": [
+    {
+      "id": "welcome",
+      "stepik_id": 910001,
+      "topic": "values",
+      "lesson": 900001,
+      "position": 1,
+      "paths": [
+        "welcome.md"
+      ],
+      "block": {
+        "name": "text",
+        "text": "<h1>Tiny Python workshop</h1>\n<p>Learn to describe a value and predict a small program.</p>\n<p>This demonstration is original and can be used without a Stepik account.</p>\n<table>\n<thead>\n<tr>\n<th>Value</th>\n<th>Description</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code>4</code></td>\n<td>An integer</td>\n</tr>\n<tr>\n<td><code>&quot;four&quot;</code></td>\n<td>A string</td>\n</tr>\n</tbody>\n</table>",
+        "source": {},
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    },
+    {
+      "id": "single",
+      "stepik_id": 910002,
+      "topic": "values",
+      "lesson": 900001,
+      "position": 2,
+      "paths": [
+        "single.md"
+      ],
+      "block": {
+        "name": "choice",
+        "text": "<h2>Read a value</h2>\n<p>Which expression produces an integer?</p>",
+        "source": {
+          "is_multiple_choice": false,
+          "is_always_correct": false,
+          "sample_size": 3,
+          "preserve_order": true,
+          "is_html_enabled": true,
+          "is_options_feedback": false,
+          "options": [
+            {
+              "text": "<code>4</code>",
+              "is_correct": true,
+              "feedback": ""
+            },
+            {
+              "text": "<code>\"4\"</code>",
+              "is_correct": false,
+              "feedback": ""
+            },
+            {
+              "text": "<code>[4]</code>",
+              "is_correct": false,
+              "feedback": ""
+            }
+          ]
+        },
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    },
+    {
+      "id": "multiple",
+      "stepik_id": 910003,
+      "topic": "values",
+      "lesson": 900001,
+      "position": 3,
+      "paths": [
+        "multiple.md"
+      ],
+      "block": {
+        "name": "choice",
+        "text": "<h2>Choose integers</h2>\n<p>Select all integer literals.</p>",
+        "source": {
+          "is_multiple_choice": true,
+          "is_always_correct": false,
+          "sample_size": 4,
+          "preserve_order": true,
+          "is_html_enabled": true,
+          "is_options_feedback": false,
+          "options": [
+            {
+              "text": "<code>0</code>",
+              "is_correct": true,
+              "feedback": ""
+            },
+            {
+              "text": "<code>\"0\"</code>",
+              "is_correct": false,
+              "feedback": ""
+            },
+            {
+              "text": "<code>12</code>",
+              "is_correct": true,
+              "feedback": ""
+            },
+            {
+              "text": "<code>1.5</code>",
+              "is_correct": false,
+              "feedback": ""
+            }
+          ]
+        },
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    },
+    {
+      "id": "matching",
+      "stepik_id": 910004,
+      "topic": "values",
+      "lesson": 900001,
+      "position": 4,
+      "paths": [
+        "matching.md"
+      ],
+      "block": {
+        "name": "matching",
+        "text": "<h2>Match values and types</h2>\n<p>Match each value to its Python type.</p>",
+        "source": {
+          "preserve_firsts_order": true,
+          "is_html_enabled": true,
+          "pairs": [
+            {
+              "first": "<code>7</code>",
+              "second": "<code>int</code>"
+            },
+            {
+              "first": "<code>\"seven\"</code>",
+              "second": "<code>str</code>"
+            },
+            {
+              "first": "<code>[7]</code>",
+              "second": "<code>list</code>"
+            }
+          ]
+        },
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    },
+    {
+      "id": "code",
+      "stepik_id": 910005,
+      "topic": "values",
+      "lesson": 900001,
+      "position": 5,
+      "paths": [
+        "code.md"
+      ],
+      "block": {
+        "name": "text",
+        "text": "<h2>Predict the output</h2>\n<p>Read the function before running it.</p>\n<pre><code class=\"language-python\">def twice(value: int) -&gt; int:\n    return value * 2\n\nprint(twice(3))\n</code></pre>\n<p>Indentation and spaces inside strings are significant.</p>",
+        "source": {},
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    },
+    {
+      "id": "practice",
+      "stepik_id": 910006,
+      "topic": "values",
+      "lesson": 900001,
+      "position": 6,
+      "paths": [
+        "practice.md"
+      ],
+      "block": {
+        "name": "text",
+        "text": "<h2>Local practice</h2>\n<p>Write a function that adds one to an integer.</p>\n<h3>Self-check</h3>\n<p>Run these assertions locally:</p>\n<pre><code class=\"language-python\">assert increment(0) == 1\nassert increment(-1) == 0\n</code></pre>",
+        "source": {},
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    },
+    {
+      "id": "summary",
+      "stepik_id": 910007,
+      "topic": "recap",
+      "lesson": 900002,
+      "position": 1,
+      "paths": [
+        "summary.md"
+      ],
+      "block": {
+        "name": "text",
+        "text": "<h2>Recap</h2>\n<p>An integer, a string, and a list are different kinds of values.</p>\n<p>Try explaining each example in your own words.</p>",
+        "source": {},
+        "options": {},
+        "is_deprecated": false,
+        "video": null,
+        "subtitles": {},
+        "subtitle_files": [],
+        "tests_archive": null,
+        "feedback_correct": "",
+        "feedback_wrong": ""
+      }
+    }
+  ]
+}

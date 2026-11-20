@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "title": "Tiny Python workshop",
+  "topics": [
+    {
+      "id": "values",
+      "module": "module-1",
+      "lesson_id": 900001,
+      "steps": [
+        {"id": "welcome", "stepik_id": 910001, "path": "welcome.md"},
+        {"id": "single", "stepik_id": 910002, "path": "single.md"},
+        {"id": "multiple", "stepik_id": 910003, "path": "multiple.md"},
+        {"id": "matching", "stepik_id": 910004, "path": "matching.md"},
+        {"id": "code", "stepik_id": 910005, "path": "code.md"},
+        {"id": "practice", "stepik_id": 910006, "path": "practice.md"}
+      ]
+    },
+    {
+      "id": "recap",
+      "module": "module-1",
+      "lesson_id": 900002,
+      "steps": [
+        {"id": "summary", "stepik_id": 910007, "path": "summary.md"}
+      ]
+    }
+  ]
+}

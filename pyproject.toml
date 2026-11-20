@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stepik-author-tools"
+version = "0.1.0"
+description = "Build Stepik imports, compare author sources, and prepare three-way patches"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["markdown-it-py>=3,<5", "beautifulsoup4>=4.12,<5"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+stepik-author = "stepik_author_tools.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
