@@ -1,173 +1,190 @@
-"""Typed wire contracts and normalized domain values shared by the library.
+"""Validated Pydantic contracts for author sources and synchronization results."""
 
-TypedDict records retain the public JSON-compatible API. Immutable semantic values
-are used inside comparison and merging, where missing or mixed field types would
-otherwise be easy to overlook. Unknown Stepik source settings remain JSON values.
-"""
+from typing import Annotated, Literal, Self, TypeAlias
 
-from dataclasses import dataclass
-from typing import Literal, NotRequired, TypeAlias, TypedDict
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import JsonValue as JsonValue
 
-JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
 StepKind: TypeAlias = Literal["text", "choice", "matching"]
+PositiveId: TypeAlias = Annotated[int, Field(gt=0)]
+NonEmptyText: TypeAlias = Annotated[str, Field(min_length=1)]
+Version: TypeAlias = Annotated[int, Field(ge=1, le=1)]
+_JSON_OBJECT = TypeAdapter(JsonObject)
 
 
-class ChoiceOption(TypedDict):
-    """Author-visible option; a missing key is rejected during semantic validation."""
+class DomainModel(BaseModel):
+    """Strict input types, explicit fields and errors that do not echo source content."""
+
+    model_config = ConfigDict(
+        strict=True,
+        extra="forbid",
+        validate_assignment=True,
+        hide_input_in_errors=True,
+        allow_inf_nan=False,
+    )
+
+    def to_dict(self, *, exclude_unset: bool = False) -> JsonObject:
+        """Serialize to JSON values, optionally preserving omitted source fields."""
+        return _JSON_OBJECT.validate_python(
+            self.model_dump(mode="json", exclude_unset=exclude_unset),
+            strict=True,
+        )
+
+
+class ExtensibleModel(DomainModel):
+    """Retain JSON extension fields from Stepik instead of hiding unknown settings."""
+
+    model_config = ConfigDict(extra="allow")
+    __pydantic_extra__: JsonObject
+
+
+class ChoiceOption(ExtensibleModel):
+    """Author-visible choice option with an explicit, strictly boolean answer key."""
 
     text: str
-    is_correct: NotRequired[bool]
-    feedback: NotRequired[str]
+    is_correct: bool
+    feedback: str = ""
 
 
-class MatchingPair(TypedDict):
-    """Two rendered fragments belonging to the same correct pair."""
+class MatchingPair(ExtensibleModel):
+    """Rendered fragments belonging to one correct matching pair."""
 
     first: str
     second: str
 
 
-class StepSource(TypedDict, total=False):
-    """Known Stepik grading fields; validated JSON may retain extension settings."""
+class StepSource(ExtensibleModel):
+    """Known grading settings; only fields actually supplied are compared/exported."""
 
-    options: list[ChoiceOption]
-    pairs: list[MatchingPair]
-    is_multiple_choice: bool
-    is_always_correct: bool
-    sample_size: int
-    preserve_order: bool
-    is_html_enabled: bool
-    is_options_feedback: bool
-    preserve_firsts_order: bool
+    options: list[ChoiceOption] = Field(default_factory=list)
+    pairs: list[MatchingPair] = Field(default_factory=list)
+    is_multiple_choice: bool = False
+    is_always_correct: bool = False
+    sample_size: Annotated[int, Field(ge=0)] = 0
+    preserve_order: bool = False
+    is_html_enabled: bool = False
+    is_options_feedback: bool = False
+    preserve_firsts_order: bool = False
 
 
-class Block(TypedDict):
-    """Stepik block payload; optional editor fields are unrelated to comparison."""
+class Block(ExtensibleModel):
+    """Stepik content plus author settings, retaining optional editor metadata."""
 
     name: str
     text: str
-    source: NotRequired[StepSource | None]
-    options: NotRequired[JsonObject]
-    is_deprecated: NotRequired[bool]
-    video: NotRequired[JsonValue]
-    subtitles: NotRequired[JsonObject]
-    subtitle_files: NotRequired[list[JsonValue]]
-    tests_archive: NotRequired[JsonValue]
-    feedback_correct: NotRequired[str]
-    feedback_wrong: NotRequired[str]
+    source: StepSource | None = None
+    options: JsonObject = Field(default_factory=dict)
+    is_deprecated: bool = False
+    video: JsonValue = None
+    subtitles: JsonObject = Field(default_factory=dict)
+    subtitle_files: list[JsonValue] = Field(default_factory=list)
+    tests_archive: JsonValue = None
+    feedback_correct: str = ""
+    feedback_wrong: str = ""
 
 
-class StepRecord(TypedDict):
-    """Snapshot row; local compilation also populates id, topic and source paths."""
+class StepRecord(DomainModel):
+    """Snapshot row; local compilation additionally supplies identity and source paths."""
 
-    stepik_id: int | None
-    lesson: int | None
-    position: int
+    stepik_id: PositiveId | None = None
+    lesson: PositiveId | None = None
+    position: PositiveId
     block: Block
-    id: NotRequired[str]
-    topic: NotRequired[str]
-    paths: NotRequired[list[str]]
+    id: str = ""
+    topic: str = ""
+    paths: list[str] = Field(default_factory=list)
 
 
-class Snapshot(TypedDict):
-    """Complete selected lessons, optionally verified as a common merge base."""
+class Snapshot(DomainModel):
+    """Complete selected lessons, optionally marked as a verified common ancestor."""
 
-    version: int
+    version: Version
     steps: list[StepRecord]
-    kind: NotRequired[str]
+    kind: Literal["verified-baseline"] | None = None
 
 
-class StepSpec(TypedDict):
-    """Stable local identity and either one path or ordered combined source paths."""
+class StepSpec(DomainModel):
+    """Stable local identity and either a path or ordered combined source paths."""
 
-    id: str
-    stepik_id: NotRequired[int | None]
-    path: NotRequired[str]
-    paths: NotRequired[list[str]]
+    id: NonEmptyText
+    stepik_id: PositiveId | None = None
+    path: NonEmptyText | None = None
+    paths: list[NonEmptyText] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_source(self) -> Self:
+        """Require source material rather than postponing a missing-key error until build."""
+        if not self.path and not self.paths:
+            raise ValueError("Each step requires path or nonempty paths")
+        return self
+
+    def source_paths(self) -> list[str]:
+        """Return source order, preserving the existing preference for combined paths."""
+        if self.paths:
+            return self.paths
+        assert self.path is not None
+        return [self.path]
 
 
-class TopicSpec(TypedDict):
+class TopicSpec(DomainModel):
     """Ordered lesson manifest and its module membership."""
 
-    id: str
+    id: NonEmptyText
     steps: list[StepSpec]
-    module: NotRequired[str]
-    lesson_id: NotRequired[int | None]
+    module: str | None = None
+    lesson_id: PositiveId | None = None
 
 
-class Manifest(TypedDict):
-    """Versioned source manifest, independent of the CLI and network transport."""
+class Manifest(DomainModel):
+    """Versioned course source manifest, independent of CLI and HTTP transport."""
 
-    version: int
+    version: Version
     topics: list[TopicSpec]
-    title: NotRequired[str]
+    title: str | None = None
 
 
-class Conflict(TypedDict):
-    """Reviewable three-way conflict; values are serializable without custom encoders."""
+class Conflict(DomainModel):
+    """Three-way evidence for one conflict without embedding markers in source files."""
 
+    model_config = ConfigDict(frozen=True)
     step_id: str
     field: str
-    base: JsonValue
-    local: JsonValue
-    remote: JsonValue
+    base: JsonValue = None
+    local: JsonValue = None
+    remote: JsonValue = None
 
 
-@dataclass(frozen=True)
-class SemanticStep:
-    """Normalized content and grading state, excluding transport/editor metadata."""
+class SemanticStep(DomainModel):
+    """Normalized content and grading state without transport/editor metadata."""
 
+    model_config = ConfigDict(frozen=True)
     kind: str
     body: str
     options: tuple[str, ...] = ()
     answers: tuple[int, ...] = ()
     pairs: tuple[tuple[str, str], ...] = ()
-    settings: JsonObject | None = None
+    settings: JsonObject = Field(default_factory=dict)
     feedback: tuple[str, ...] = ()
 
-    def to_dict(self) -> JsonObject:
-        """Expose comparison fields in the established machine-readable order."""
-        return {
-            "kind": self.kind,
-            "body": self.body,
-            "options": list(self.options),
-            "answers": list(self.answers),
-            "pairs": [list(pair) for pair in self.pairs],
-            "settings": self.settings or {},
-            "feedback": list(self.feedback),
-        }
 
+class Change(DomainModel):
+    """One semantic or structural difference and its readable detail."""
 
-@dataclass(frozen=True)
-class Change:
-    """A single semantic or structural difference with an optional readable diff."""
-
+    model_config = ConfigDict(frozen=True)
     step_id: str
-    position: int
+    position: PositiveId
     field: str
     before: JsonValue
     after: JsonValue
     message: str
     detail: str = ""
 
-    def to_dict(self) -> JsonObject:
-        """Serialize the public CLI/MCP-facing difference record."""
-        return {
-            "step_id": self.step_id,
-            "position": self.position,
-            "field": self.field,
-            "before": self.before,
-            "after": self.after,
-            "message": self.message,
-            "detail": self.detail,
-        }
 
+class PullResult(DomainModel):
+    """Patch proposal only; producing a result never changes course source files."""
 
-@dataclass(frozen=True)
-class PullResult:
-    """Patch proposal only: preparing this value never changes course source files."""
-
+    model_config = ConfigDict(frozen=True)
     patch: str
     conflicts: list[Conflict]
     changed_files: list[str]

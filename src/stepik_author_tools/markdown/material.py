@@ -79,29 +79,29 @@ class Material:
             raise ValueError(
                 "Unsupported exercise type; only explicit local self-check tasks become text"
             )
-        return "text", {}
+        return "text", StepSource()
 
     def compile(self) -> Block:
         """Compile student HTML and separate grading settings with empty feedback."""
         type_match = re.search(r"(?m)^\*\*(?:Тип|Type):\*\*\s*([^\n]+)", self.text)
         metadata = type_match[1] if type_match else ""
         kind: StepKind = "text"
-        source: StepSource = {}
+        source: StepSource = StepSource()
         if not self.task and (metadata or self.section("answer") or self.section("explanation")):
             raise ValueError("Exercise/author sections require an explicit Condition heading")
         if self.task:
             kind, source = self._grading(metadata)
         markdown = "## " + self.title + "\n\n" + self.body() if self.task else self.body()
-        return {
-            "name": kind,
-            "text": render(markdown),
-            "source": source,
-            "options": {},
-            "is_deprecated": False,
-            "video": None,
-            "subtitles": {},
-            "subtitle_files": [],
-            "tests_archive": None,
-            "feedback_correct": "",
-            "feedback_wrong": "",
-        }
+        return Block(
+            name=kind,
+            text=render(markdown),
+            source=source,
+            options={},
+            is_deprecated=False,
+            video=None,
+            subtitles={},
+            subtitle_files=[],
+            tests_archive=None,
+            feedback_correct="",
+            feedback_wrong="",
+        )

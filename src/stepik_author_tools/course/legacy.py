@@ -27,7 +27,7 @@ def _map_step(root: Path, map_path: Path, number: str, cell: str) -> StepSpec:
             raise ValueError("Map source escapes module root")
         paths.append(resolved.relative_to(root).as_posix())
     stable_id = hashlib.sha256("|".join(paths).encode()).hexdigest()[:16]
-    return {"id": stable_id, "paths": paths}
+    return StepSpec(id=stable_id, paths=paths)
 
 
 def _map_topic(root: Path, map_path: Path) -> TopicSpec | None:
@@ -38,12 +38,12 @@ def _map_topic(root: Path, map_path: Path) -> TopicSpec | None:
     if [int(number) for number, _ in rows] != list(range(1, len(rows) + 1)):
         raise ValueError("Map positions must be consecutive")
     lesson = re.search(r"stepik.org/(?:edit-)?lesson/(\d+)", text)
-    return {
-        "id": map_path.parent.name,
-        "module": root.name,
-        "lesson_id": int(lesson[1]) if lesson else None,
-        "steps": [_map_step(root, map_path, number, cell) for number, cell in rows],
-    }
+    return TopicSpec(
+        id=map_path.parent.name,
+        module=root.name,
+        lesson_id=int(lesson[1]) if lesson else None,
+        steps=[_map_step(root, map_path, number, cell) for number, cell in rows],
+    )
 
 
 def load_legacy(directory: Path) -> tuple[Path, Manifest]:
@@ -54,4 +54,4 @@ def load_legacy(directory: Path) -> tuple[Path, Manifest]:
     topics = [topic for map_path in maps if (topic := _map_topic(root, map_path)) is not None]
     if not topics:
         raise ValueError("No course.json or ordered topic README maps found")
-    return root, {"version": 1, "topics": topics}
+    return root, Manifest(version=1, topics=topics)

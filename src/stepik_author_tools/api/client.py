@@ -8,14 +8,18 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from ..domain.models import JsonObject, Snapshot, TopicSpec
-from ..serialization.jsonio import array_value, integer_value, object_value, optional_id
-from ..serialization.schemas import normalize_snapshot
+from pydantic import TypeAdapter
+
+from ..domain.models import JsonObject, PositiveId, Snapshot, TopicSpec
+from ..domain.stepik import LessonSteps, PageMetadata
+from ..serialization.jsonio import array_value, object_value
+from ..serialization.snapshots import normalize_snapshot
 
 QueryValue: TypeAlias = str | int | bool | list[str | int]
 _RESOURCES = {"courses", "sections", "units", "lessons", "steps", "step-sources"}
 _API_ROOT = "https://stepik.org/api/"
 _MAX_PAGES = 10_000
+_API_ID = TypeAdapter(PositiveId)
 
 
 class Transport(Protocol):
@@ -93,7 +97,8 @@ class StepikClient:
         """Read a supported resource, following all pages with no fixed page-size assumption."""
         if resource not in _RESOURCES:
             raise ValueError("Unsupported API resource")
-        optional_id(object_id, "API ID")
+        if object_id is not None:
+            _API_ID.validate_python(object_id, strict=True)
         path = resource + (f"/{object_id}" if object_id is not None else "")
         result: list[JsonObject] = []
         for page in range(1, _MAX_PAGES + 1):
@@ -101,11 +106,8 @@ class StepikClient:
             result.extend(
                 object_value(row, resource) for row in array_value(data.get(resource), resource)
             )
-            meta = object_value(data.get("meta", {}), "meta")
-            has_next = meta.get("has_next", False)
-            if not isinstance(has_next, bool):
-                raise ValueError("Expected meta.has_next to be a boolean")
-            if not has_next:
+            meta = PageMetadata.model_validate(data.get("meta", {}))
+            if not meta.has_next:
                 return result
         raise ValueError("Stepik pagination did not terminate")
 
@@ -114,8 +116,7 @@ class StepikClient:
         if len(lessons) != 1:
             raise ValueError("Lesson unavailable")
         rows = []
-        for value in array_value(lessons[0].get("steps"), "lesson.steps"):
-            step_id = integer_value(value, "lesson step ID")
+        for step_id in LessonSteps.model_validate(lessons[0]).steps:
             sources = self.get("step-sources", step_id)
             if len(sources) != 1:
                 raise ValueError("Author step source unavailable; refusing an incomplete snapshot")
@@ -126,7 +127,7 @@ class StepikClient:
         """Fetch every selected lesson's author source without falling back to student data."""
         rows: list[JsonObject] = []
         for topic in course.topics(scope):
-            lesson_id = topic.get("lesson_id")
+            lesson_id = topic.lesson_id
             if not lesson_id:
                 raise ValueError("Live comparison requires lesson_id in every selected topic")
             rows.extend(self._lesson_sources(lesson_id))

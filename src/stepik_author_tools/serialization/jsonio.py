@@ -4,11 +4,15 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from ..domain.models import JsonObject, JsonValue
 
 
 def json_value(value: object) -> JsonValue:
     """Copy a serializable value, rejecting non-string keys and unknown objects."""
+    if isinstance(value, BaseModel):
+        return json_value(value.model_dump(mode="json", exclude_unset=True))
     if value is None or isinstance(value, str | bool | int | float):
         return value
     if isinstance(value, list | tuple):
@@ -36,30 +40,6 @@ def array_value(value: object, label: str) -> list[JsonValue]:
     if not isinstance(value, list):
         raise ValueError(f"Expected {label} to be an array")
     return [json_value(item) for item in value]
-
-
-def string_value(value: object, label: str) -> str:
-    """Require a string without coercing numbers or null to source content."""
-    if not isinstance(value, str):
-        raise ValueError(f"Expected {label} to be a string")
-    return value
-
-
-def integer_value(value: object, label: str) -> int:
-    """Require an integer; booleans are invalid IDs despite Python's subclassing."""
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"Expected {label} to be an integer")
-    return value
-
-
-def optional_id(value: object, label: str) -> int | None:
-    """Validate an optional positive platform ID."""
-    if value is None:
-        return None
-    result = integer_value(value, label)
-    if result <= 0:
-        raise ValueError(f"Expected {label} to be a positive integer")
-    return result
 
 
 def read(path: Path) -> str:

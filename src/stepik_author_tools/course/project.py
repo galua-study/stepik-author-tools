@@ -6,7 +6,6 @@ from pathlib import Path
 from ..domain.models import Manifest, StepRecord, StepSpec, TopicSpec
 from ..markdown.material import Material
 from ..serialization.jsonio import contained, load_json, read
-from ..serialization.schemas import parse_manifest, selected_topics, source_paths
 from .legacy import load_legacy
 
 
@@ -20,10 +19,17 @@ class Course:
 
     def topics(self, scope: str | None = None) -> list[TopicSpec]:
         """Select all topics, an exact topic ID, or an exact module ID."""
-        return selected_topics(self.manifest, scope)
+        topics = [
+            topic
+            for topic in self.manifest.topics
+            if scope is None or scope in (topic.id, topic.module)
+        ]
+        if not topics:
+            raise ValueError(f"Unknown or empty scope: {scope}")
+        return topics
 
     def _compile_step(self, topic: TopicSpec, step: StepSpec, position: int) -> StepRecord:
-        paths = source_paths(step)
+        paths = step.source_paths()
         texts = [read(contained(self.root, path)) for path in paths]
         if len(paths) > 1 and any(Material(text).task for text in texts):
             raise ValueError("Only text lessons may combine multiple source files")
@@ -31,22 +37,22 @@ class Course:
             block = Material("\n\n".join(texts)).compile()
         except ValueError as error:
             raise ValueError(f"{paths[0]}: {error}") from error
-        return {
-            "id": step["id"],
-            "stepik_id": step.get("stepik_id"),
-            "topic": topic["id"],
-            "lesson": topic.get("lesson_id"),
-            "position": position,
-            "paths": paths,
-            "block": block,
-        }
+        return StepRecord(
+            id=step.id,
+            stepik_id=step.stepik_id,
+            topic=topic.id,
+            lesson=topic.lesson_id,
+            position=position,
+            paths=paths,
+            block=block,
+        )
 
     def compile(self, scope: str | None = None) -> list[StepRecord]:
         """Compile sources in manifest order with stable IDs alongside their positions."""
         return [
             self._compile_step(topic, step, position)
             for topic in self.topics(scope)
-            for position, step in enumerate(topic["steps"], 1)
+            for position, step in enumerate(topic.steps, 1)
         ]
 
 
@@ -62,15 +68,15 @@ def _validate_identities(course: Course) -> None:
     topic_ids: set[str | int] = set()
     lesson_ids: set[str | int] = set()
     paths: set[Path] = set()
-    for topic in course.manifest["topics"]:
-        _check_unique(topic["id"], topic_ids, "topic ID")
-        if (lesson_id := topic.get("lesson_id")) is not None:
+    for topic in course.manifest.topics:
+        _check_unique(topic.id, topic_ids, "topic ID")
+        if (lesson_id := topic.lesson_id) is not None:
             _check_unique(lesson_id, lesson_ids, "lesson ID")
-        for step in topic["steps"]:
-            _check_unique(step["id"], local_ids, "step ID")
-            if (remote_id := step.get("stepik_id")) is not None:
+        for step in topic.steps:
+            _check_unique(step.id, local_ids, "step ID")
+            if (remote_id := step.stepik_id) is not None:
                 _check_unique(remote_id, remote_ids, "Stepik ID")
-            for relative in source_paths(step):
+            for relative in step.source_paths():
                 path = contained(course.root, relative)
                 if path in paths:
                     raise ValueError("Each source file must belong to exactly one step")
@@ -83,7 +89,7 @@ def load_course(path: str | Path) -> Course:
     if path.is_dir() and (path / "course.json").exists():
         path /= "course.json"
     if path.suffix == ".json":
-        course = Course(path.parent, parse_manifest(load_json(path)), path)
+        course = Course(path.parent, Manifest.model_validate(load_json(path)), path)
     else:
         root, manifest = load_legacy(path.parent if path.is_file() else path)
         course = Course(root, manifest)

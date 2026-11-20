@@ -68,13 +68,13 @@ def make_conflict(
     step_id: str, field: str, base: object = None, local: object = None, remote: object = None
 ) -> Conflict:
     """Create a serializable conflict record without losing three-way evidence."""
-    return {
-        "step_id": step_id,
-        "field": field,
-        "base": json_value(base),
-        "local": json_value(local),
-        "remote": json_value(remote),
-    }
+    return Conflict(
+        step_id=step_id,
+        field=field,
+        base=json_value(base),
+        local=json_value(local),
+        remote=json_value(remote),
+    )
 
 
 def _merge_field(

@@ -26,7 +26,7 @@ class FakeTransport:
 
 class FakeCourse:
     def topics(self, scope: str | None = None) -> list[TopicSpec]:
-        return [{"id": "example", "lesson_id": 1, "steps": []}]
+        return [TopicSpec(id="example", lesson_id=1, steps=[])]
 
 
 def test_pagination_and_get_only() -> None:
@@ -79,7 +79,7 @@ def test_successful_author_snapshot_uses_injected_transport() -> None:
         ]
     )
     snapshot = StepikClient(transport=transport).snapshot(FakeCourse())
-    assert snapshot["steps"][0]["stepik_id"] == 2
+    assert snapshot.steps[0].stepik_id == 2
     assert len(transport.requests) == 2
 
 

@@ -1,181 +1,321 @@
 # stepik-author-tools
 
-Build `.step` files from Markdown, inspect semantic differences against Stepik,
-and prepare a three-way Git patch without overwriting local author notes.
-Python 3.11+, tested on Windows with PowerShell. Version 0.1 is read-only on Stepik.
+**Keep Stepik lessons and Git sources in sync — without losing author notes.**
 
-## Quick start (no account)
+[![CI](https://github.com/galua-study/stepik-author-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/galua-study/stepik-author-tools/actions/workflows/ci.yml)
+[![CD](https://github.com/galua-study/stepik-author-tools/actions/workflows/cd.yml/badge.svg)](https://github.com/galua-study/stepik-author-tools/actions/workflows/cd.yml)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)
+[![MIT license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+A Python library and CLI for course authors: compile Markdown into `.step` imports,
+review meaningful differences, and prepare a Git patch from edits made on Stepik.
+Version 0.1 supports text, single choice, multiple choice, matching, and local
+self-check exercises. Network operations are read-only.
+
+[Quick start](#quick-start) · [Authoring](#authoring) · [Synchronization](#synchronization) ·
+[Architecture](#architecture) · [Library](#python-library-and-future-mcp) · [Releases](#installation-and-releases)
+
+```mermaid
+flowchart LR
+    Markdown["Markdown + course.json"] --> Build[build]
+    Build --> Imports[".step files"]
+    Imports --> Editor["Stepik editor import"]
+    Stepik["Stepik author sources"] --> Diff[diff]
+    Markdown --> Diff
+    Stepik --> Pull[pull]
+    Markdown --> Pull
+    Base["Verified baseline"] --> Pull
+    Pull --> Review["Git patch + conflict report"]
+```
+
+| Command | Result | Source changes |
+| --- | --- | --- |
+| `build` | Ordered `.step` files, index, local snapshot | None |
+| `diff` | Changes to text/code, options, keys, pairs, settings, and positions | None |
+| `pull` | Reviewable Git patch and conflict report | None; apply the patch yourself |
+
+## Quick start
+
+Requires Python 3.11+ and Git. This PowerShell example uses a **synthetic course**;
+no account or token is needed.
 
 ```powershell
 git clone https://github.com/galua-study/stepik-author-tools.git
 cd stepik-author-tools
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install .
-.\.venv\Scripts\stepik-author.exe build examples/demo --out out/import
-.\.venv\Scripts\stepik-author.exe diff examples/demo --remote examples/demo/remote-edited.json
-.\.venv\Scripts\stepik-author.exe pull examples/demo --remote examples/demo/remote-edited.json --base examples/demo/baseline.json --out out/stepik.patch
-git apply --check --directory=examples/demo out/stepik.patch
-git apply --directory=examples/demo out/stepik.patch
+.\.venv\Scripts\Activate.ps1
+
+stepik-author build examples/demo --out out/import
+stepik-author diff examples/demo --remote examples/demo/remote-edited.json
+stepik-author pull examples/demo --remote examples/demo/remote-edited.json --base examples/demo/baseline.json --out out/review.patch
 ```
 
-`diff` exits **1** when differences exist (expected in this demo), **0** for equality.
-`pull` exits **1** for conflicts, **0** for a conflict-free proposal. All commands
-exit **2** on invalid input/access errors. `pull` never applies a patch: inspect it
-and its `.patch.json` report first. Patch paths are relative to the project root
-(the directory containing `course.json`). Omit `--directory` when that is your Git root.
+On Linux/macOS use `python3 -m venv .venv` and `source .venv/bin/activate`.
+If PowerShell activation is restricted, call `.\.venv\Scripts\stepik-author.exe` directly.
 
-The synthetic course covers text, single/multiple choice, matching and local
-self-check exercises. Its numeric platform IDs are **fictional**, for offline use
-only. The edited snapshot changes a question and its correct answer, changes a
-Python line and moves steps 5 and 6. The author explanation stays intact.
+The demo builds **seven steps**. Diff reports a changed question, a changed answer
+key, a changed Python line, and moves between positions 5 and 6. Pull proposes
+changes to three files while preserving the local author explanation.
+The demo IDs are fictional; use these fixtures only with `--remote`.
 
-## Source format and identity
+Inspect `out/review.patch` and `out/review.patch.json`, then apply:
 
-See [`examples/demo/course.json`](examples/demo/course.json). A manifest contains
-`version: 1`, topics (`id`, `module`, `lesson_id`) and ordered `steps`. Each step
-has a stable local `id`, a relative `path` (or `paths` for combined introductions),
-and its real `stepik_id` after import. Paths must stay inside the project root;
-one source file cannot belong to several steps. Topic/step IDs must be unique.
+```powershell
+git apply --check --directory=examples/demo out/review.patch
+git apply --directory=examples/demo out/review.patch
+stepik-author diff examples/demo --remote examples/demo/remote-edited.json
+```
 
-`--scope values` selects one topic; `--scope module-1` selects a module. Without
-it all topics are used. Array order is authoritative. A Stepik lesson URL ending
-in `/step/4` gives a **position**, not a stable step ID. Obtain IDs from
-`GET /api/lessons/{id}` and inspect the corresponding `step-sources`; record the
-mapping deliberately. The tool never matches questions by position or fuzzy text.
-Update `path` when renaming files, keeping the same `id` and `stepik_id`.
+The final diff should be empty. Patch paths are relative to the course root;
+omit `--directory` when the course root is also your Git root.
 
-`build` also accepts existing Russian topic/module directories containing ordered
-README tables (`[title](<relative.md>)`), including a map row that combines two
-introductions. This adapter reads the course without modifying it. Use an explicit
-manifest for synchronization; auto-generated path IDs are intended for building.
-For courses without maps, write a manifest rather than guessing lesson order.
+| Exit code | `build` | `diff` | `pull` |
+| --- | --- | --- | --- |
+| `0` | Built | Equal | Prepared without conflicts |
+| `1` | — | Differences found (expected in the demo) | Conflicts need review |
+| `2` | Invalid input or access error | Invalid input or access error | Invalid input or access error |
 
-Task Markdown uses `### Condition`, `Options`, `Correct answer(s)`, `Explanation`,
-or their Russian equivalents `Условие`, `Варианты ответа`, `Правильный ответ`,
-`Правильные ответы`, `Объяснение`. Matching uses numbered `Left column` /
-`Левая колонка`, lettered `Right column` / `Правая колонка` and `1 — B, 2 — A` keys.
-Use consecutive option numbers starting at 1; correct-answer lists start with
-numbers, for example `2. explanation` or `1, 3`. Explicit `multiple` / `несколько`
-in task metadata supports a multiple-choice question with only one correct option.
+## Authoring
 
-Student content ends before answer/option/author sections. Self-check instructions
-between Condition and Correct answer remain visible in a text step. Author notes
-and reference solutions stay in Markdown; choice keys go only into `block.source`;
-feedback stays empty. Options retain order. Markdown tables, HTML, lists and fenced
-code are supported. Local images/relative links are retained, **not uploaded**;
-use accessible absolute asset URLs for imported lessons.
+[`examples/demo`](examples/demo) is a complete source-format reference.
+[`course.json`](examples/demo/course.json) declares modules, topics, and ordered steps:
 
-Unsupported exercise types/layouts (including sorting and custom matching layouts)
-fail explicitly. This release does not infer custom grading scripts.
+```json
+{
+  "version": 1,
+  "topics": [
+    {
+      "id": "values",
+      "module": "module-1",
+      "lesson_id": 900001,
+      "steps": [
+        {"id": "welcome", "stepik_id": 910001, "path": "welcome.md"}
+      ]
+    }
+  ]
+}
+```
 
-## Live comparison and the merge baseline
+Array order defines step order. Use `--scope values` for one topic or
+`--scope module-1` for a module. Paths stay inside the course root; IDs and source
+file ownership must be unique. `paths` can combine several text introductions.
 
-Set `STEPIK_TOKEN` in your local process to an OAuth bearer token with author access.
-Do not put credentials in the manifest or command arguments. The client only calls
-GET endpoints at `https://stepik.org`; it refuses redirects and uses timeouts.
+Stable `stepik_id` values identify steps across moves. Obtain the real IDs after
+import from `GET /api/lessons/{id}` and the corresponding `step-sources`, then
+record the mapping. The `/step/4` suffix in a lesson URL means **position**, not
+identity. Synchronization never guesses identities from positions or similar text.
+Build can run before platform IDs are assigned.
+
+| Markdown section | Destination |
+| --- | --- |
+| `### Condition` / `### Условие` | Student-facing content |
+| `### Options` / `### Варианты ответа` | Ordered choice options |
+| `### Correct answer(s)` / `### Правильный ответ` / `### Правильные ответы` | Grading key in `block.source` |
+| `### Explanation` / `### Объяснение` | Kept locally for the author |
+| Reference solutions and transfer notes | Kept locally for the author |
+
+Number choices consecutively from 1. Answer keys can be `2. explanation`, `1, 3`,
+or numbered bullet entries. Explicit `multiple` / `несколько` metadata supports
+multiple choice with one correct option. Matching uses numbered `Left column` /
+`Левая колонка`, lettered `Right column` / `Правая колонка`, and keys like `1 — B, 2 — A`.
+
+Self-check tasks become text steps, with instructions visible and solutions kept
+local. Feedback stays empty. Tables, lists, HTML, fenced code, and option order
+are preserved. Relative asset links are retained; images are not uploaded.
+
+An adapter also reads existing Russian topic/module README tables, including
+combined introductions and numeric topic ordering. Use an explicit manifest for
+synchronization. Programming, text-entry, sorting, and custom matching layouts
+outside this format fail with an error.
+
+## Synchronization
+
+An offline `--remote` file can contain a version-1 snapshot or a complete
+`{"step-sources": [...]}` author API export. Include all steps from the selected
+lessons, stable IDs, positions, and grading data. Missing steps are reported;
+student-visible `steps` responses cannot substitute for author answer keys.
+
+For live reads, set `STEPIK_TOKEN` in your process to an OAuth bearer token with
+author access. Keep credentials out of manifests and command arguments.
 
 ```powershell
 stepik-author diff path/to/course.json --scope module-1 --live
-# Once the imported source and remote source are equal:
+# Save a common ancestor only after local and remote sources agree:
 stepik-author diff path/to/course.json --live --save-baseline .stepik/base.json
-# Later, after edits on either side:
+# After subsequent changes on either side:
 stepik-author pull path/to/course.json --live --base .stepik/base.json --out out/review.patch
 ```
 
-A baseline is saved only after a zero semantic diff. Keep it until the next agreed
-synchronization point; `build` writes a local snapshot but never advances the merge
-baseline. After applying a patch, resolving conflicts and reconciling any remaining
-local changes on Stepik, run `diff --save-baseline` again. Never replace the baseline
-with a snapshot of only one edited side. Keep baseline scope sufficient for the
-next pull. Scope-limited saves contain only that scope.
+`diff --json` returns structured changes. HTML normalization ignores editor
+IDs/classes and harmless wrappers while preserving links, styling, structure, and
+literal code whitespace. Correct answers, matching pairs, and moves are compared
+separately from student text.
 
-Offline `--remote` accepts a version-1 snapshot (see demo) or a complete
-`{"step-sources": [...]}` API export. It must contain the entire selected lesson(s),
-including stable IDs, positions, lesson IDs and author `block.source` data. Missing
-steps are reported as missing/deleted, not silently ignored. A student-visible
-`steps` response is insufficient for checking answer keys.
+### How pull protects concurrent edits
 
-HTML comparison ignores editor IDs/classes, data attributes and harmless wrappers,
-but retains links, images, structure, styling and literal whitespace in code.
-Reports distinguish content/code, options/order, keys, pairs, feedback, settings
-and moves. `--json` produces structured differences for callers.
+```mermaid
+flowchart TD
+    Base["Verified common ancestor"] --> Merge["Three-way merge by step ID and field"]
+    Local["Git: new author explanation"] --> Merge
+    Remote["Stepik: corrected student paragraph"] --> Merge
+    Merge --> Independent["Independent edits"]
+    Merge --> Overlap["Same paragraph or grading field edited twice"]
+    Independent --> Verify["Project into Markdown and rebuild"]
+    Verify --> Patch["Patch keeps both changes"]
+    Overlap --> Conflict["Report conflict; keep entire local step"]
+```
 
-Pull merges body blocks and exercise fields against the saved base. Separate
-paragraph edits can merge; two edits to the same paragraph/code block conflict.
-An edited student paragraph and a new local Explanation merge independently.
-Changed text is written as **raw HTML inside Markdown** to preserve platform
-formatting; it is not prettified or lossily converted back to Markdown. Unchanged
-author sections are kept. Every proposed material is rebuilt and checked against
-the intended merged semantic result before entering the patch.
+Separate paragraph changes can merge. Code blocks, option lists, keys, and pairs
+are atomic; incompatible edits conflict. A conflicting question keeps its entire
+local content and key. Unrelated steps may still appear in the proposed patch.
 
-Conflicts are explicit records with base/local/remote values. Independent changes
-to other steps may still appear in the patch; a conflicting step retains its
-entire local content, so a disputed question cannot acquire a different answer key.
-Settings without a Markdown representation, type changes, added/deleted steps,
-cross-topic moves, edited titles and combined-source edits require manual review.
-Within-topic moves update the manifest; concurrent incompatible order changes
-conflict. Options/keys/pairs are atomic fields; conflicting edits within one such
-field are deliberately not guessed. No baseline means no three-way pull.
+Changed student content is retained as raw HTML inside Markdown, preserving the
+platform formatting. Author sections stay intact. Each proposed material is
+recompiled and checked against the intended merged result before it enters a patch.
+Within-topic moves update the manifest; incompatible concurrent reorders conflict.
 
-## Library and future MCP
+Settings without a Markdown representation, step type changes, additions,
+deletions, cross-topic moves, edited task titles, and combined-source edits need
+manual review. Pull requires a verified baseline. Build never advances it.
+After applying and reconciling changes, save a new baseline only after a zero diff.
+A scoped baseline contains only that scope; keep it sufficient for the next pull.
+
+## Architecture
+
+Implementation lives under `src/stepik_author_tools`; tests mirror the same packages
+under `tests/stepik_author_tools`. Dependencies point toward the domain contracts.
+
+```mermaid
+flowchart TD
+    CLI["cli · arguments and output"] --> Sync["sync · build, diff, merge, patches"]
+    CLI --> API["api · read-only Stepik transport"]
+    Sync --> Course["course · manifests and legacy maps"]
+    Sync --> Markdown["markdown · parsing and HTML semantics"]
+    Course --> Markdown
+    Course --> Serialization["serialization · JSON and paths"]
+    Sync --> Serialization
+    API --> Serialization
+    Markdown --> Domain["domain · Pydantic contracts"]
+    Serialization --> Domain
+    API --> Domain
+    Course --> Domain
+    Sync --> Domain
+```
+
+| Package | Responsibility |
+| --- | --- |
+| `domain` | Strict Pydantic models for manifests, API envelopes, snapshots, and results |
+| `serialization` | UTF-8/JSON boundaries, snapshot conversion, path containment |
+| `markdown` | Student/author section boundaries, grading syntax, HTML normalization |
+| `course` | Source loading, stable identity checks, ordered compilation |
+| `sync` | Semantic comparison, three-way merging, projection, ordering, Git patches |
+| `api` | Injectable GET transport, pagination, complete author snapshots |
+| `cli` | Argument parsing and presentation of library results |
+
+Pydantic validates nested data at input boundaries without coercing strings or
+booleans into IDs. Unknown manifest fields are rejected. Unknown Stepik source
+settings remain visible to comparison and serialization. Omitted optional fields
+stay omitted on export. Result models prevent attribute reassignment.
+
+Pull orchestration is separated into `semantic.py` (identity/normalization),
+`merge.py` (pure merge rules), `projection.py` (section edits and semantic round
+trip), `ordering.py` (manifest order), and `patches.py` (patch rendering).
+The API and synchronization packages do not depend on one another.
+
+## Python library and future MCP
 
 ```python
 from stepik_author_tools import (
-    load_course,
-    build,
-    read_snapshot,
-    compare,
-    prepare_pull,
-    StepikClient,
+    build, compare, load_course, prepare_pull, read_snapshot,
 )
 
 course = load_course("examples/demo")
-build(course, "out/import")
+compiled = build(course, "out/import")
 remote = read_snapshot("examples/demo/remote-edited.json")
 changes = compare(course, remote, scope="module-1")
 proposal = prepare_pull(course, remote, read_snapshot("examples/demo/baseline.json"))
-print(proposal.patch, proposal.conflicts)
-# For live reads: remote = StepikClient().snapshot(course, scope="module-1")
+
+print(compiled.steps[0].block.name)
+print(proposal.patch)
+print([conflict.model_dump(mode="json") for conflict in proposal.conflicts])
+# Live reads: StepikClient().snapshot(course, scope="module-1")
 ```
 
-These operations do not depend on argparse, subprocesses or a running CLI. A future
-MCP server can expose them for: **“Compare the first module with the draft on Stepik
-and prepare a patch.”** (“Сравни первый модуль с черновиком на Stepik и подготовь
-патч”.) The intended sequence is resolve scope → read author sources → compare →
-prepare reviewable patch. MCP transport and direct REST writes are outside v0.1.
+Library records are Pydantic models: access `snapshot.steps`, not dictionary keys.
+Use `model_validate()` for incoming objects and
+`model_dump(mode="json", exclude_unset=True)` for wire-compatible data.
+CLI arguments and `.step`/snapshot JSON formats remain compatible; the old
+internal top-level facade modules have been removed. The package ships `py.typed`.
 
-## API evidence and verification
+A future MCP adapter can call the same operations for:
+**“Compare the first module with the draft on Stepik and prepare a patch.”**
+(*«Сравни первый модуль с черновиком на Stepik и подготовь патч».*)
+The sequence is resolve scope → read author sources → compare → prepare a patch.
+The library runs independently of the CLI; MCP transport and REST writes are future work.
 
-The [official API repository](https://github.com/StepicOrg/Stepik-API) documents
-OAuth, flat resource lists and pagination. Its
-[export example](https://github.com/StepicOrg/Stepik-API/blob/master/examples/export_course.py)
-reads course → sections → units → lessons → steps → author step-sources and writes
-`.step` objects containing `block`. Its
-[creation example](https://github.com/StepicOrg/Stepik-API/blob/master/examples/create_content.py)
-documents choice fields and POST/PUT author operations. Those writes are deliberately
-absent here. Refer also to [Stepik API docs](https://stepik.org/api/docs/).
+## Installation and releases
 
-See [VALIDATION.md](VALIDATION.md) for the actual verification boundary. Synthetic
-tests are not evidence of live editor acceptance or live author authorization.
+For daily CLI use, [pipx](https://pipx.pypa.io/stable/) installs the application in
+its own environment. Until the first release is published, install the current Git version:
 
-## Development
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
+# Open a new terminal after ensurepath.
+pipx install git+https://github.com/galua-study/stepik-author-tools.git
+```
 
-Implementation is separated into packages under `src/stepik_author_tools`:
-`domain`, `serialization`, `markdown`, `course`, `sync`, `api` and `cli`.
-See [the architecture guide](docs/architecture.md) for responsibilities, dependencies
-and the merge invariants. Public library calls and CLI arguments remain compatible.
+Tagged releases will provide a wheel, source archive (including the demo), and
+`SHA256SUMS` on [GitHub Releases](https://github.com/galua-study/stepik-author-tools/releases).
+Download the wheel and install it with `pipx install ./downloaded-package.whl`.
+Library consumers can install the same wheel with `python -m pip install`.
+Python 3.11+ is required; there is no standalone executable in this version.
+
+```mermaid
+flowchart LR
+    Tag["Push vX.Y.Z tag"] --> CI["CI: lint, types, tests"]
+    CI --> Build["Build sdist, then wheel"]
+    Build --> Install["Install and test on Windows + Linux"]
+    Install --> Release["GitHub Release + SHA256SUMS"]
+    Release --> User["pipx / pip"]
+```
+
+Maintainers update `project.version` in `pyproject.toml`, commit it, then push a
+matching `vX.Y.Z` tag. CD refuses mismatched versions and publishes only after
+checks pass. Run **Actions → CD → Run workflow** for a dry run: packages become
+workflow artifacts, and no release is created. CI is reused by CD; release write
+permission is limited to the publishing job. No PyPI credentials are needed.
+A later PyPI channel can use Trusted Publishing once the project name and ownership
+are configured; it would publish the same tested distributions.
+
+## Development and verification
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install '.[dev]'
 .\scripts\check.ps1
 ```
 
-The check script runs `ruff check .`, `ruff format --check .`, strict `mypy` and
-`pytest`. All four checks are required in CI. Ruff also enforces documented public
-functions, annotations and limits on function complexity. Type checking includes
-the source packages, demo script and tests; downstream users receive `py.typed`.
+The script runs Ruff lint/format checks, strict mypy with the Pydantic plugin, and
+pytest. CI covers Python 3.11–3.13 on Windows and Ubuntu, plus minimum runtime
+dependencies. Tests use synthetic data and injected HTTP transport. They exercise
+actual patch application, concurrent edits, output contracts, and the installed
+CLI. Course Markdown is excluded from code formatting.
 
-Keep real course manifests, `.step` files, snapshots, patches and tokens outside
-public repositories. They may contain unpublished lessons and answer keys.
-Ignored `out/`, `private/` and `.stepik/` are suitable local working directories.
-Only the original synthetic example is checked into this repository.
+| Evidence | Verified boundary |
+| --- | --- |
+| Offline tests | All three commands; grading/privacy; formatting and code; identities/moves; successful merges and conflicts; strict models; mocked pagination/access failures |
+| Clean installation | Wheel installation, dependency check, demo commands, and Git patch validation |
+| Local real-course compatibility | Checked 22 Flask steps against 21 available saved exports; 42 typed-Python choice exercises compiled. Unsupported exercise layouts were rejected. Real material remains outside this repository. |
+| Live Stepik API | Public GET traversal through course/section/unit/lesson resources and a text step; unauthenticated author `step-sources` returned HTTP 403 |
+| Not verified live | Authorized draft reads, multi-page export, a new editor import of this release, or REST writes |
+
+The [official Stepik API examples](https://github.com/StepicOrg/Stepik-API),
+[export example](https://github.com/StepicOrg/Stepik-API/blob/master/examples/export_course.py),
+and [content creation example](https://github.com/StepicOrg/Stepik-API/blob/master/examples/create_content.py)
+document resources and `.step`/grading fields. The client implements GET only,
+with timeouts and redirect rejection. Mocked checks do not establish live author access.
+
+Keep real manifests, snapshots, answer keys, patches, and tokens outside public
+repositories. Only the independent synthetic course is committed here; `out/`,
+`private/`, and `.stepik/` are ignored for local work.

@@ -2,7 +2,7 @@
 
 import re
 
-from ..domain.models import StepSource
+from ..domain.models import ChoiceOption, MatchingPair, StepSource
 from .markup import fragment
 
 
@@ -44,18 +44,18 @@ def choice_source(options_text: str, answer: str, metadata: str) -> StepSource:
     options = numbered(options_text)
     correct = correct_indices(answer, len(options))
     multiple = bool(re.search(r"несколько|несколькими|multiple", metadata, re.I))
-    return {
-        "is_multiple_choice": multiple or len(correct) > 1,
-        "is_always_correct": False,
-        "sample_size": len(options),
-        "preserve_order": True,
-        "is_html_enabled": True,
-        "is_options_feedback": False,
-        "options": [
-            {"text": fragment(value), "is_correct": index in correct, "feedback": ""}
+    return StepSource(
+        is_multiple_choice=multiple or len(correct) > 1,
+        is_always_correct=False,
+        sample_size=len(options),
+        preserve_order=True,
+        is_html_enabled=True,
+        is_options_feedback=False,
+        options=[
+            ChoiceOption(text=fragment(value), is_correct=index in correct, feedback="")
             for index, value in enumerate(options, 1)
         ],
-    }
+    )
 
 
 def _right_column(text: str) -> dict[str, str]:
@@ -77,11 +77,11 @@ def matching_source(left_text: str, right_text: str, answer: str) -> StepSource:
     unique = len(mapping) == len(keys) and len(set(mapping.values())) == len(left)
     if not complete or not unique or set(mapping.values()) != set(right):
         raise ValueError("Matching requires a complete one-to-one answer map")
-    return {
-        "preserve_firsts_order": True,
-        "is_html_enabled": True,
-        "pairs": [
-            {"first": fragment(value), "second": fragment(right[mapping[index]])}
+    return StepSource(
+        preserve_firsts_order=True,
+        is_html_enabled=True,
+        pairs=[
+            MatchingPair(first=fragment(value), second=fragment(right[mapping[index]]))
             for index, value in enumerate(left, 1)
         ],
-    }
+    )

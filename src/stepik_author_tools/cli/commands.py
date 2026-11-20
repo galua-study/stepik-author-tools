@@ -7,7 +7,7 @@ from ..api.client import StepikClient
 from ..course.project import Course, load_course
 from ..domain.models import Change, Snapshot
 from ..serialization.jsonio import write_json
-from ..serialization.schemas import read_snapshot
+from ..serialization.snapshots import read_snapshot
 from ..sync.build import build, save_baseline
 from ..sync.comparison import compare
 from ..sync.pull import prepare_pull
@@ -55,7 +55,7 @@ def _pull(course: Course, remote: Snapshot, args: Arguments) -> int:
         f"{len(result.conflicts)} conflicts. Sources unchanged."
     )
     for conflict in result.conflicts:
-        print(f"CONFLICT [{conflict['step_id']}]: {conflict['field']}")
+        print(f"CONFLICT [{conflict.step_id}]: {conflict.field}")
     return 1 if result.conflicts else 0
 
 
@@ -65,7 +65,7 @@ def run(args: Arguments) -> int:
     if args.command == "build":
         output = _required_path(args.out, "--out")
         result = build(course, output, args.scope)
-        print(f"Built {len(result['steps'])} .step files in {output}")
+        print(f"Built {len(result.steps)} .step files in {output}")
         return 0
     remote = (
         read_snapshot(args.remote) if args.remote else StepikClient().snapshot(course, args.scope)

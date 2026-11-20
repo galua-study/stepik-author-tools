@@ -37,7 +37,7 @@ def _text_detail(before: str, after: str) -> tuple[str, str]:
 
 
 def _content_changes(local: StepRecord, remote: StepRecord) -> list[Change]:
-    before, after = semantic_block(local["block"]), semantic_block(remote["block"])
+    before, after = semantic_block(local.block), semantic_block(remote.block)
     old_fields, new_fields = before.to_dict(), after.to_dict()
     changes = []
     for field, old_value in old_fields.items():
@@ -53,7 +53,15 @@ def _content_changes(local: StepRecord, remote: StepRecord) -> list[Change]:
                 f"{json.dumps(new_value, ensure_ascii=False)}"
             )
         changes.append(
-            Change(local["id"], local["position"], field, old_value, new_value, label, detail)
+            Change(
+                step_id=local.id,
+                position=local.position,
+                field=field,
+                before=old_value,
+                after=new_value,
+                message=label,
+                detail=detail,
+            )
         )
     return changes
 
@@ -62,28 +70,28 @@ def _step_changes(local: StepRecord, remote: StepRecord | None) -> list[Change]:
     if remote is None:
         return [
             Change(
-                local["id"],
-                local["position"],
-                "missing",
-                local["stepik_id"],
-                None,
-                "step missing remotely",
+                step_id=local.id,
+                position=local.position,
+                field="missing",
+                before=local.stepik_id,
+                after=None,
+                message="step missing remotely",
             )
         ]
     changes = []
     for field, before, after in (
-        ("position", local["position"], remote["position"]),
-        ("lesson", local["lesson"], remote["lesson"]),
+        ("position", local.position, remote.position),
+        ("lesson", local.lesson, remote.lesson),
     ):
         if before != after:
             changes.append(
                 Change(
-                    local["id"],
-                    local["position"],
-                    field,
-                    before,
-                    after,
-                    f"step moved: {field} {before} -> {after}",
+                    step_id=local.id,
+                    position=local.position,
+                    field=field,
+                    before=before,
+                    after=after,
+                    message=f"step moved: {field} {before} -> {after}",
                 )
             )
     return changes + _content_changes(local, remote)
@@ -100,12 +108,12 @@ def compare(course: Course, remote: Snapshot, scope: str | None = None) -> list[
     ]
     changes.extend(
         Change(
-            str(step["stepik_id"]),
-            step["position"],
-            "added",
-            None,
-            step["stepik_id"],
-            "unmapped step added remotely",
+            step_id=str(step.stepik_id),
+            position=step.position,
+            field="added",
+            before=None,
+            after=step.stepik_id,
+            message="unmapped step added remotely",
         )
         for step in alignment.added
     )

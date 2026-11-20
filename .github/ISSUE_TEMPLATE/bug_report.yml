@@ -1,0 +1,84 @@
+name: Bug report
+description: Report a reproducible problem in the CLI, library, or delivery
+title: '[Bug]: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Use the demo or a small synthetic course for reproduction.
+        Do not attach tokens, unpublished lessons, or real answer keys.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Build and Markdown
+        - Diff and identity
+        - Pull and conflicts
+        - Stepik API
+        - Python models and library
+        - Installation and releases
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened and how does it affect your work?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include commands and minimal synthetic input.
+      placeholder: |
+        1. Install ...
+        2. Run stepik-author ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release version or commit hash.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, installation method, and offline or live mode.
+      placeholder: Windows 11, Python 3.12, pipx, offline demo
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and additional context
+      description: Include the error and exit code after removing private content.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and found no duplicate
+          required: true
+        - label: I removed tokens, private course content, and personal data
+          required: true

@@ -1,0 +1,71 @@
+name: Feature request
+description: Suggest an improvement to course authoring, the library, or delivery
+title: '[Feature]: '
+body:
+  - type: markdown
+    attributes:
+      value: Describe the authoring problem and expected outcome. Search existing issues first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is difficult or impossible in your current workflow?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior and primary use case.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Build and source formats
+        - Diff and reports
+        - Pull and merging
+        - Stepik API
+        - Python library and models
+        - Future MCP adapter
+        - Installation and releases
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Usage example
+      description: Add a CLI command, Python example, or synthetic course format.
+      render: text
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you try?
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions for accepting the change.
+      placeholder: |
+        - [ ] The author can ...
+        - [ ] The behavior is covered by tests
+        - [ ] Documentation is updated
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Related issues, examples, or constraints. Use synthetic content only.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and found no duplicate
+          required: true

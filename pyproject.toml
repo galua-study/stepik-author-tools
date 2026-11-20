@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,11 @@ description = "Build Stepik imports, compare author sources, and prepare three-w
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-dependencies = ["markdown-it-py>=3,<5", "beautifulsoup4>=4.12,<5"]
+dependencies = ["markdown-it-py>=3,<5", "beautifulsoup4>=4.12,<5", "pydantic>=2.12,<3"]
+
+[project.urls]
+Repository = "https://github.com/galua-study/stepik-author-tools"
+Issues = "https://github.com/galua-study/stepik-author-tools/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]
@@ -46,9 +50,15 @@ max-statements = 50
 
 [tool.mypy]
 python_version = "3.11"
-files = ["src", "scripts", "tests"]
+files = ["src", "tests"]
 strict = true
 warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_typed = true
+init_forbid_extra = true
+warn_required_dynamic_aliases = true
 
 [tool.setuptools.package-data]
 stepik_author_tools = ["py.typed"]
