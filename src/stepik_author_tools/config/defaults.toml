@@ -10,7 +10,7 @@ manifest_name = "course.json"
 [markdown]
 condition = ["Condition", "Условие"]
 
-# Every heading in this table ends the student-facing part of a task.
+# Every heading in this table ends the student-facing part of a task
 [markdown.author_sections]
 options = ["Options", "Варианты ответа"]
 answer = ["Correct answer", "Correct answers", "Правильный ответ", "Правильные ответы", "Правильное решение", "Reference solution"]
@@ -19,7 +19,7 @@ left = ["Left column", "Левая колонка"]
 right = ["Right column", "Правая колонка"]
 transfer = ["Transfer notes", "Для переноса в Stepik"]
 
-# Literal TOML strings preserve Python regex escapes. The parser reads named groups.
+# Literal TOML strings preserve Python regex escapes. The parser reads named groups
 [markdown.patterns]
 task_prefix = '^(?:Задание|Task)\s+[\d.]+\s*'
 type_line = '(?m)^\*\*(?:Тип|Type):\*\*[ \t]*(?P<value>[^\n]+)'

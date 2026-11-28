@@ -1,6 +1,6 @@
 ## Summary
 
-<!-- What problem does this solve? Describe the resulting behavior. Link related issues. -->
+<!-- What problem does this solve? Describe the resulting behavior. Link related issues -->
 
 ## Area
 
@@ -21,7 +21,7 @@
 
 ## How to verify
 
-<!-- Commands, synthetic inputs, expected results; distinguish offline from live checks. -->
+<!-- Commands, synthetic inputs, expected results; distinguish offline from live checks -->
 
 ## Checks
 
@@ -36,8 +36,8 @@
 
 ## Release impact
 
-<!-- Version change, breaking API/format changes, migration instructions; or "None". -->
+<!-- Version change, breaking API/format changes, migration instructions; or "None" -->
 
 ## Additional information
 
-<!-- Constraints, tradeoffs, or screenshots of output where useful. -->
+<!-- Constraints, tradeoffs, or screenshots of output where useful -->

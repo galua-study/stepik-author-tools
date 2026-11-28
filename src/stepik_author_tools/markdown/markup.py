@@ -15,7 +15,7 @@ _WRAPPED_BLOCKS = {"p", "pre", "h2", "h3", "ul", "ol", "table"}
 def render(value: str) -> str:
     """Render CommonMark with tables and source-provided HTML enabled."""
     html = MARKDOWN.render(value)
-    # MarkdownIt supports custom non-HTML renderers; this instance must return HTML.
+    # MarkdownIt supports custom non-HTML renderers; this instance must return HTML
     if not isinstance(html, str):
         raise ValueError("Markdown renderer did not return HTML text")
     return html.strip()
@@ -54,7 +54,7 @@ def _normalize_text(soup: BeautifulSoup) -> None:
         if isinstance(node, Comment):
             node.extract()
             continue
-        # Code indentation and spaces inside literals are observable course content.
+        # Code indentation and spaces inside literals are observable course content
         if node.find_parent(["pre", "code", "script", "style"]):
             continue
         normalized = _HTML_WHITESPACE.sub(" ", str(node))
@@ -110,7 +110,7 @@ def blocks(value: str) -> list[str]:
         if isinstance(node, Tag):
             parts.append(node.decode())
         elif isinstance(node, NavigableString):
-            # Escape literal angle brackets and ampersands before reassembling the HTML.
+            # Escape literal angle brackets and ampersands before reassembling the HTML
             parts.append(node.output_ready())
         else:
             raise ValueError(f"Unsupported HTML node: {type(node).__name__}")

@@ -10,7 +10,7 @@ from ..serialization.files import read_text
 
 
 def _topic_order(path: Path) -> list[tuple[int, int | str]]:
-    # Topic 2 must precede Topic 10; string sorting would change the course sequence.
+    # Topic 2 must precede Topic 10; string sorting would change the course sequence
     return [
         (0, int("".join(chars))) if digits else (1, "".join(chars).casefold())
         for digits, chars in groupby(path.parent.name, key=str.isdecimal)

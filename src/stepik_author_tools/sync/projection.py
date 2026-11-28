@@ -16,9 +16,9 @@ def _student_body(material: Material, local: str, merged: str) -> str:
         local_blocks = blocks(local)
         if not merged_blocks or not local_blocks or merged_blocks[0] != local_blocks[0]:
             raise ValueError("Exercise title change requires manual review")
-        # The task heading comes from its own Markdown line, outside the condition.
+        # The task heading comes from its own Markdown line, outside the condition
         merged_blocks = merged_blocks[1:]
-    # A blank line separates CommonMark HTML blocks, including multiline code.
+    # A blank line separates CommonMark HTML blocks, including multiline code
     return "\n\n".join(merged_blocks)
 
 

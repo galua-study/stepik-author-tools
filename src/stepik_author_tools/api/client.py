@@ -72,7 +72,7 @@ class StepikClient:
         defaults = load_settings().api
         self.settings = settings or defaults
         url = self.settings.base_url
-        # A course profile can select a mirror. Ambient Stepik credentials belong to Stepik.
+        # A course profile can select a mirror. Ambient Stepik credentials belong to Stepik
         official = (url.host, url.port) == (defaults.base_url.host, defaults.base_url.port)
         self.token = os.environ.get("STEPIK_TOKEN") if token is None and official else token
         self.timeout = self.settings.timeout if timeout is None else timeout
@@ -87,7 +87,7 @@ class StepikClient:
         try:
             return _RESPONSE.validate_json(self.transport.get(request, self.timeout), strict=True)
         except HTTPError as error:
-            # Response bodies and exception strings may contain credentials/content.
+            # Response bodies and exception strings may contain credentials/content
             raise ValueError(
                 f"Stepik GET {path}: HTTP {error.code}; "
                 "author source access may require STEPIK_TOKEN"

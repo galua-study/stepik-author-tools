@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 
 # git apply strips one path component by default (-p1). These identify the two
-# versions of the same course-relative file in a traditional unified diff.
+# versions of the same course-relative file in a traditional unified diff
 GIT_SOURCE_PREFIX = "a/"
 GIT_DESTINATION_PREFIX = "b/"
 _UTF8_BOM = chr(0xFEFF)
@@ -15,8 +15,8 @@ _GIT_ESCAPES.update({ord('"'): '\\"', ord("\\"): "\\\\"})
 
 
 def _source_format(before: str, after: str) -> str:
-    # Compilation accepts UTF-8 BOM and universal newlines, but Git matches bytes.
-    # Restore the source convention before generating hunk context and replacements.
+    # Compilation accepts UTF-8 BOM and universal newlines, but Git matches bytes. Restore
+    # the source convention before generating hunk context and replacements
     bom = _UTF8_BOM if before.startswith(_UTF8_BOM) else ""
     original = list(StringIO(before.removeprefix(bom), newline=""))
     normalized = [line.replace("\r\n", "\n").replace("\r", "\n") for line in original]
@@ -43,7 +43,7 @@ def render_patch(root: Path, proposed: Mapping[Path, str]) -> tuple[str, list[st
         if before == after:
             continue
         name = path.relative_to(root).as_posix()
-        # Git uses C quoting for file paths, including octal escapes for control characters.
+        # Git uses C quoting for file paths, including octal escapes for control characters
         escaped = name.translate(_GIT_ESCAPES)
         diff = unified_diff(
             list(StringIO(before, newline="\n")),

@@ -47,7 +47,7 @@ def _propose_step(
     online = semantic_block(remote.block)
     merged, conflicts = merge_semantics(local.id, before, current, online)
     # Never attach an undisputed new key to a disputed question. Other steps may
-    # still be proposed, but a conflicting step stays entirely local.
+    # still be proposed, but a conflicting step stays entirely local
     if conflicts or merged == current:
         return None, conflicts
     if len(local.paths) != 1:
@@ -76,7 +76,7 @@ def _material_proposals(
         if conflict := _identity_conflict(step, before, other):
             conflicts.append(conflict)
             continue
-        # The identity check guarantees both sides exist before semantic merging.
+        # The identity check guarantees both sides exist before semantic merging
         assert before is not None and other is not None
         content, step_conflicts = _propose_step(course, step, before, other)
         conflicts.extend(step_conflicts)
