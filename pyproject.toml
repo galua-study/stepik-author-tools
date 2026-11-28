@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stepik-author-tools"
-version = "0.1.0"
+version = "0.1.1"
 description = "Build Stepik imports, compare author sources, and prepare three-way patches"
 readme = "README.md"
 requires-python = ">=3.11"

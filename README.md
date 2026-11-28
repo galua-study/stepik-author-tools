@@ -346,17 +346,17 @@ The library runs independently of the CLI; MCP transport and REST writes are fut
 Download the wheel for your release from [GitHub Releases](https://github.com/galua-study/stepik-author-tools/releases).
 Each release also includes a source archive with the demo course and a `SHA256SUMS` file.
 With Python 3.11 or later, run these commands in the download directory to install
-the v0.1.0 CLI in its own environment:
+the v0.1.1 CLI in its own environment:
 
 ```powershell
 py -m pip install --user pipx
 py -m pipx ensurepath
 # Open a new terminal after ensurepath
-pipx install ./stepik_author_tools-0.1.0-py3-none-any.whl
+pipx install ./stepik_author_tools-0.1.1-py3-none-any.whl
 ```
 
 For library use, install the same wheel into your project's environment with
-`python -m pip install ./stepik_author_tools-0.1.0-py3-none-any.whl`.
+`python -m pip install ./stepik_author_tools-0.1.1-py3-none-any.whl`.
 
 ```mermaid
 flowchart LR
@@ -380,7 +380,7 @@ commands alongside the standard setup and artifact actions. Run the same checks
 locally from the repository root (or an extracted source archive):
 
 ```powershell
-python .github/scripts/check_release_tag.py v0.1.0
+python .github/scripts/check_release_tag.py v0.1.1
 python -m build
 python .github/scripts/write_checksums.py dist
 # In a fresh virtual environment:
