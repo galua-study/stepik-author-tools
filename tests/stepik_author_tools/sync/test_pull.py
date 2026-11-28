@@ -18,7 +18,7 @@ def test_remote_paragraph_local_explanation_and_reorder_merge(project: Course) -
     remote = read_snapshot(DEMO / "remote-edited.json")
     proposal = prepare_pull(project, remote, base)
     assert not proposal.conflicts
-    assert "a string?" not in path.read_text()  # Proposal only.
+    assert "a string?" not in path.read_text()  # Proposal only
     apply(project, proposal)
     assert "New local author explanation." in path.read_text()
     assert "LOCAL AUTHOR NOTE" in path.read_text()

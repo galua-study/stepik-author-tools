@@ -88,7 +88,7 @@ def merge_semantics(
     """Merge typed fields; callers discard the entire step if any field conflicts."""
     conflicts: dict[SemanticField, str] = {}
     # Keys address option positions: a key from one side cannot safely refer to
-    # an independently edited option list on the other side.
+    # an independently edited option list on the other side
     _, grading_clash = merge_value(
         (base.options, base.answers),
         (local.options, local.answers),

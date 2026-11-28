@@ -71,6 +71,7 @@ The final diff should be empty. Paths in the patch are relative to the course ro
 Generated outputs must not alias course sources, the manifest, or CLI input files.
 Such collisions are rejected before writing. Patches retain UTF-8 BOMs and existing
 line endings, including unchanged lines in files with mixed endings.
+
 Git uses `a/` for the old version and `b/` for the new version. By default,
 `git apply` strips that first path component. Omit `--directory` when the course
 root is also your Git root. [Git patch path handling](https://git-scm.com/docs/git-apply)
@@ -119,26 +120,46 @@ Build can run before platform IDs are assigned.
 
 | Markdown section | Destination |
 | --- | --- |
-| `### Condition` / `### Условие` | Student-facing content |
-| `### Options` / `### Варианты ответа` | Ordered choice options |
-| `### Correct answer(s)` / `### Правильный ответ` / `### Правильные ответы` | Grading key in `block.source` |
-| `### Explanation` / `### Объяснение` | Kept locally for the author |
+| `### Condition` | Student-facing content |
+| `### Options` | Ordered choice options |
+| `### Correct answer` or `### Correct answers` | Grading key in `block.source` |
+| `### Explanation` | Kept locally for the author |
 | Reference solutions and transfer notes | Kept locally for the author |
 
 Number choices consecutively from 1. Matching right-column labels must be unique.
-Answer keys can be `2. explanation`, `1, 3`,
-or numbered bullet entries. Explicit `multiple` / `несколько` metadata supports
-multiple choice with one correct option. Matching uses numbered `Left column` /
-`Левая колонка`, lettered `Right column` / `Правая колонка`, and keys like `1 — B, 2 — A`.
+Answer keys can be `2. explanation`, `1, 3`, or numbered bullet entries.
+Use `**Type:** multiple choice` for a multiple-choice question with one correct option.
+For matching, number the items under `Left column`, label the items under
+`Right column` with letters, and write the key as `1 — B, 2 — A`.
 
 Self-check tasks become text steps, with instructions visible and solutions kept
 local. Feedback stays empty. Tables, lists, HTML, fenced code, and option order
 are preserved. Relative asset links are retained; images are not uploaded.
 
-An adapter also reads existing Russian topic/module README tables, including
+An adapter also reads legacy topic/module README tables, including
 combined introductions and numeric topic ordering. Use an explicit manifest for
 synchronization. Programming, text-entry, sorting, and custom matching layouts
 outside this format fail with an error.
+
+### Import steps into a Stepik lesson
+
+Run `stepik-author build`, then use the generated `index.json` to find each
+file's topic and position. In the lesson editor, create or select a destination
+step whose type matches the file's `block.name`. Stepik rejects a `choice` or
+`matching` file uploaded into a text step.
+
+| Demo file | Destination | Step type (`block.name`) |
+| --- | --- | --- |
+| `001-01.step` | Values, step 1 | `text` |
+| `002-02.step`, `003-03.step` | Values, steps 2 and 3 | `choice` for both single and multiple choice |
+| `004-04.step` | Values, step 4 | `matching` under the additional step types |
+| `005-05.step`, `006-06.step` | Values, steps 5 and 6 | `text` for the code example and self-check |
+| `007-01.step` | Recap, step 1 | `text` |
+
+In the step menu, choose **Import step**, select the corresponding file,
+and save the lesson. Reopen graded steps in the author
+editor to review the keys, option order, and matching pairs. The matching
+step fixes the order of the left column.
 
 ## Configuration
 
@@ -163,7 +184,7 @@ review = ["Editorial review"]
 option_heading = '(?m)^Item (?P<number>\d+):[ \t]*\r?\n'
 
 [diff.fields]
-answers = "Изменился правильный ответ"
+answers = "Answer key changed"
 
 [api]
 max_pages = 200
@@ -174,7 +195,7 @@ timeout = 15
 stepik-author diff examples/demo --config author.toml --remote examples/demo/remote-edited.json
 ```
 
-Heading aliases extend the bundled English and Russian names. Every heading in
+Heading aliases extend the bundled names. Every heading in
 `markdown.author_sections` ends student-facing content. Other settings override
 their defaults. If you change grading syntax, pair the input patterns with the
 output templates under `markdown.format` so pulled edits use the same notation.
@@ -295,7 +316,7 @@ from stepik_author_tools import (
     build, compare, load_course, load_settings, prepare_pull, read_snapshot,
 )
 
-settings = load_settings()  # Pass a TOML path to use a custom profile.
+settings = load_settings()  # Pass a TOML path to use a custom profile
 course = load_course("examples/demo", settings=settings)
 compiled = build(course, "out/import")
 remote = read_snapshot("examples/demo/remote-edited.json")
@@ -305,7 +326,7 @@ proposal = prepare_pull(course, remote, read_snapshot("examples/demo/baseline.js
 print(compiled.steps[0].block.name)
 print(proposal.patch)
 print([conflict.model_dump(mode="json") for conflict in proposal.conflicts])
-# For live reads, use StepikClient(settings=settings.api).snapshot(course, scope="module-1").
+# For live reads, use StepikClient(settings=settings.api).snapshot(course, scope="module-1")
 ```
 
 Library records are Pydantic models. Access `snapshot.steps` for validated rows.
@@ -317,33 +338,31 @@ internal top-level facade modules have been removed. The package ships `py.typed
 
 A future MCP adapter can call the same operations for:
 **“Compare the first module with the draft on Stepik and prepare a patch.”**
-(*«Сравни первый модуль с черновиком на Stepik и подготовь патч».*)
 The sequence is resolve scope → read author sources → compare → prepare a patch.
 The library runs independently of the CLI; MCP transport and REST writes are future work.
 
 ## Installation and releases
 
-For daily CLI use, [pipx](https://pipx.pypa.io/stable/) installs the application in
-its own environment. Until the first release is published, install the current Git version:
+Download the wheel for your release from [GitHub Releases](https://github.com/galua-study/stepik-author-tools/releases).
+Each release also includes a source archive with the demo course and a `SHA256SUMS` file.
+With Python 3.11 or later, run these commands in the download directory to install
+the v0.1.0 CLI in its own environment:
 
 ```powershell
 py -m pip install --user pipx
 py -m pipx ensurepath
-# Open a new terminal after ensurepath.
-pipx install git+https://github.com/galua-study/stepik-author-tools.git
+# Open a new terminal after ensurepath
+pipx install ./stepik_author_tools-0.1.0-py3-none-any.whl
 ```
 
-Tagged releases will provide a wheel, source archive (including the demo), and
-`SHA256SUMS` on [GitHub Releases](https://github.com/galua-study/stepik-author-tools/releases).
-Download the wheel and install it with `pipx install ./downloaded-package.whl`.
-Library consumers can install the same wheel with `python -m pip install`.
-Python 3.11+ is required; there is no standalone executable in this version.
+For library use, install the same wheel into your project's environment with
+`python -m pip install ./stepik_author_tools-0.1.0-py3-none-any.whl`.
 
 ```mermaid
 flowchart LR
     Tag["Push vX.Y.Z tag"] --> CI["CI: lint, types, tests"]
     CI --> Build["Build sdist, then wheel"]
-    Build --> Install["Install and test on Windows + Linux"]
+    Build --> Install["Install and test on Windows, Ubuntu, and macOS"]
     Install --> Release["GitHub Release + SHA256SUMS"]
     Release --> User["pipx / pip"]
 ```
@@ -375,7 +394,7 @@ only `.whl` and `.tar.gz` files and can be repeated safely. `verify_install.py`
 rejects editable/source-tree imports so delivery tests exercise the built package.
 These scripts are included in the source archive and checked by Ruff and mypy.
 
-## Development and verification
+## Development
 
 Activate the project's virtual environment, then run from the repository root:
 
@@ -387,27 +406,6 @@ python -m mypy
 python -m pytest -q
 ```
 
-These commands work on Windows, Linux and macOS. CI runs the same Ruff lint/format
-checks, strict mypy with the Pydantic plugin, and pytest. It covers Python 3.11–3.13
-on Windows and Ubuntu, plus minimum runtime
-dependencies. Tests use synthetic data and injected HTTP transport. They exercise
-actual patch application, concurrent edits, output contracts, and the installed
-CLI. Course Markdown is excluded from code formatting.
-
-| Evidence | Verified boundary |
-| --- | --- |
-| Offline tests | All three commands; grading/privacy; formatting and code; identities/moves; successful merges and conflicts; strict models; mocked pagination/access failures |
-| Clean installation | Wheel installation, dependency check, demo commands, and Git patch validation |
-| Local real-course compatibility | Checked 22 Flask steps against 21 available saved exports; 42 typed-Python choice exercises compiled. Unsupported exercise layouts were rejected. Real material remains outside this repository. |
-| Live Stepik API | Public GET traversal through course/section/unit/lesson resources and a text step; unauthenticated author `step-sources` returned HTTP 403 |
-| Not verified live | Authorized draft reads, multi-page export, a new editor import of this release, or REST writes |
-
-The [official Stepik API examples](https://github.com/StepicOrg/Stepik-API),
-[export example](https://github.com/StepicOrg/Stepik-API/blob/master/examples/export_course.py),
-and [content creation example](https://github.com/StepicOrg/Stepik-API/blob/master/examples/create_content.py)
-document resources and `.step`/grading fields. The client implements GET only,
-with timeouts and redirect rejection. Mocked checks do not establish live author access.
-
-Keep real manifests, snapshots, answer keys, patches, and tokens outside public
-repositories. Only the independent synthetic course is committed here; `out/`,
-`private/`, and `.stepik/` are ignored for local work.
+CI runs Ruff and strict mypy on Ubuntu, and pytest on Python 3.11–3.13
+on Windows, Ubuntu, and macOS (Intel and Apple silicon).
+Course Markdown is excluded from code formatting.

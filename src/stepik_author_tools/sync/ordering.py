@@ -25,7 +25,7 @@ def _merged_topic_order(
     same_members = set(base_ids) == set(local_ids) == set(remote_ids)
     same_lesson = all(step.lesson == topic.lesson_id for step in online)
     if not same_members or not same_lesson:
-        return None, []  # Additions/deletions/cross-topic moves are reviewed by pull.
+        return None, []  # Additions/deletions/cross-topic moves are reviewed by pull
     order, clash = merge_value(base_ids, local_ids, remote_ids)
     if clash:
         return None, [

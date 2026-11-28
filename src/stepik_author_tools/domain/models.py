@@ -8,7 +8,7 @@ from pydantic import JsonValue as JsonValue
 from .enums import SemanticField, StepKind, StructureField
 
 JsonObject: TypeAlias = dict[str, JsonValue]
-# Strict models also accept these exact enum values in already-decoded JSON objects.
+# Strict models also accept these exact enum values in already-decoded JSON objects
 ReportField: TypeAlias = (
     Annotated[SemanticField, BeforeValidator(lambda value: SemanticField(value))]
     | Annotated[StructureField, BeforeValidator(lambda value: StructureField(value))]
@@ -43,7 +43,7 @@ class ExtensibleModel(DomainModel):
 
     model_config = ConfigDict(extra="allow")
     # Pydantic reads this runtime annotation to validate extra values. Its base
-    # class already declares the storage as an internal, non-constructor attribute.
+    # class already declares the storage as an internal, non-constructor attribute
     if not TYPE_CHECKING:
         __pydantic_extra__: JsonObject
 

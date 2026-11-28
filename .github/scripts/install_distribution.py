@@ -1,4 +1,4 @@
-"""Install exactly one built distribution, with test dependencies, on Windows or Linux."""
+"""Install exactly one built distribution with its test dependencies."""
 
 import argparse
 import os

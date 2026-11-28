@@ -32,7 +32,7 @@ testpaths = ["tests"]
 target-version = "py311"
 line-length = 100
 extend-exclude = [".venv*", "out"]
-# Course Markdown is content, not implementation: never reformat its code fences.
+# Course Markdown is content, not implementation: never reformat its code fences
 include = ["*.py", "*.pyi", "pyproject.toml"]
 
 [tool.ruff.lint]

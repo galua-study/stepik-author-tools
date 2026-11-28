@@ -8,6 +8,7 @@ from ..config import load_settings
 from ..course.project import Course, load_course
 from ..domain.models import Change, Snapshot
 from ..serialization.files import JSON_SUFFIX, protect_inputs, read_snapshot, write_json
+from ..serialization.outputs import staged_outputs
 from ..sync.build import build, save_baseline
 from ..sync.comparison import compare
 from ..sync.pull import prepare_pull
@@ -47,15 +48,15 @@ def _pull(course: Course, remote: Snapshot, args: Arguments) -> int:
     output = _required_path(args.out, "--out")
     report = output.with_name(output.name + JSON_SUFFIX)
     protect_inputs([output, report], _input_paths(course, args))
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(result.patch, encoding="utf-8", newline="\n")
-    write_json(
-        report,
-        {
-            "conflicts": [c.to_dict() for c in result.conflicts],
-            "changed_files": [*result.changed_files],
-        },
-    )
+    with staged_outputs(output.parent, [output.name, report.name]) as stage:
+        (stage / output.name).write_text(result.patch, encoding="utf-8", newline="\n")
+        write_json(
+            stage / report.name,
+            {
+                "conflicts": [c.to_dict() for c in result.conflicts],
+                "changed_files": [*result.changed_files],
+            },
+        )
     print(
         f"Prepared patch: {len(result.changed_files)} files; "
         f"{len(result.conflicts)} conflicts. Sources unchanged."
@@ -76,7 +77,9 @@ def run(args: Arguments) -> int:
     course = load_course(args.project, settings=load_settings(args.config))
     if args.command == "build":
         output = _required_path(args.out, "--out")
-        result = build(course, output, args.scope)
+        result = build(
+            course, output, args.scope, extra_inputs=[args.config] if args.config else []
+        )
         print(f"Built {len(result.steps)} .step files in {output}")
         return 0
     remote = (

@@ -20,7 +20,7 @@ class Section:
 def parse_sections(text: str, dialect: MarkdownSettings) -> dict[str, Section]:
     """Index configured headings outside fences, block quotes and nested lists."""
     # CommonMark counts CR, LF and CRLF as line breaks. Unicode paragraph separators
-    # remain inside a line and must not shift a later answer heading into student text.
+    # remain inside a line and must not shift a later answer heading into student text
     offsets = list(accumulate(map(len, StringIO(text, newline="")), initial=0))
     tokens = MARKDOWN.parse(text)
     headings = [

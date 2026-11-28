@@ -21,7 +21,7 @@ def _run_cli(arguments: list[str], cwd: Path, expected: int = 0) -> str:
 
 
 def test_module_entry_point_from_tests_directory() -> None:
-    # IDE runners can put the test tree ahead of the installed package on sys.path.
+    # IDE runners can put the test tree ahead of the installed package on sys.path
     subprocess.run(
         [sys.executable, "-m", "stepik_author_tools.cli", "--help"],
         cwd=Path(__file__).resolve().parents[2],
